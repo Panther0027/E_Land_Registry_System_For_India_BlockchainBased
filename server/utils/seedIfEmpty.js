@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 
@@ -13,13 +14,24 @@ const run = async () => {
   await mongoose.disconnect();
 
   if (count > 0) {
-    console.log('Database already seeded, skipping.');
+    console.log('Database already has users, skipping import.');
     process.exit(0);
   }
 
-  console.log('Empty database — running full seed...');
+  const datasetPath =
+    process.env.DATASET_XLSX_PATH ||
+    path.join(__dirname, '..', '..', 'data', 'land_registry_dataset_10000.xlsx');
+
+  const script = fs.existsSync(datasetPath)
+    ? 'scripts/importLandRegistryDataset.js'
+    : 'utils/seed.js';
+
+  console.log(fs.existsSync(datasetPath)
+    ? 'Empty DB — importing 10,000 property dataset...'
+    : 'Empty DB — running default seed...');
+
   const { spawn } = await import('child_process');
-  const child = spawn('node', ['utils/seed.js'], { stdio: 'inherit', cwd: path.join(__dirname, '..') });
+  const child = spawn('node', [script], { stdio: 'inherit', cwd: path.join(__dirname, '..') });
   child.on('exit', (code) => process.exit(code ?? 0));
 };
 

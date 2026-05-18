@@ -9,7 +9,7 @@ RUN npm ci --omit=dev
 
 COPY . .
 
-RUN mkdir -p uploads demo-assets && chmod +x docker-entrypoint.sh
+RUN mkdir -p uploads demo-assets data && chmod +x docker-entrypoint.sh
 
 EXPOSE 5000
 

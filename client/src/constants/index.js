@@ -45,12 +45,12 @@ export const LANGUAGES = [
 export const SEPOLIA_EXPLORER = 'https://sepolia.etherscan.io/tx/';
 export const SEPOLIA_ADDRESS_EXPLORER = 'https://sepolia.etherscan.io/address/';
 
-/** Demo IDs for public verification (works without MongoDB seed) */
+/** Sample property IDs from imported dataset */
 export const DEMO_PROPERTY_IDS = [
-  { id: 'BH-001-KHURDA', label: 'Verified — Khurda', status: 'verified' },
-  { id: 'BH-002-CUTTACK', label: 'Pending — Cuttack', status: 'pending' },
-  { id: 'BH-003-BBSR', label: 'Verified — Bhubaneswar', status: 'verified' },
-  { id: 'BH-004-PURI', label: 'Disputed — Puri', status: 'disputed' },
+  { id: 'LR-7D185238', label: 'Anjali Das — Cuttack', status: 'verified' },
+  { id: 'LR-D661644F', label: 'Neha Verma — Rourkela', status: 'verified' },
+  { id: 'LR-A44AD11C', label: 'Priya Sharma — Puri', status: 'verified' },
+  { id: 'LR-354E7005', label: 'Rahul Kumar — Bhubaneswar', status: 'pending' },
 ];
 
 /** Valid Verhoeff Aadhaar — not used by seed accounts; safe for new registration */

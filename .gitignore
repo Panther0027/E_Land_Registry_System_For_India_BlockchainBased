@@ -11,5 +11,6 @@ artifacts/
 typechain-types/
 contracts/deployments/
 !server/demo-assets/
+IMPORTED_CREDENTIALS.txt
 uploads/*
 !uploads/.gitkeep

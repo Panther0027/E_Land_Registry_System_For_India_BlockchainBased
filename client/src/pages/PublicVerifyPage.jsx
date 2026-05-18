@@ -133,7 +133,7 @@ const PublicVerifyPage = () => {
                 </button>
               ))}
             </div>
-            <p className="text-xs text-text-secondary mt-2">Recommended: <strong>BH-001-KHURDA</strong> (verified residential plot in Khurda, Odisha)</p>
+            <p className="text-xs text-text-secondary mt-2">Try: <strong>LR-7D185238</strong> (from imported dataset)</p>
           </motion.div>
 
           <form onSubmit={handleSubmit(onSearch)} className="card space-y-4 mb-6">

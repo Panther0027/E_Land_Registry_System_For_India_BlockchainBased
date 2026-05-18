@@ -24,6 +24,7 @@ import {
 } from '../data/demoDocuments.js';
 import { getContract } from '../config/blockchain.js';
 import { isDbConnected } from '../config/db.js';
+import { isDemoModeEnabled } from '../config/appConfig.js';
 import fs from 'fs';
 
 export const registerProperty = async (req, res, next) => {
@@ -172,7 +173,7 @@ export const getProperty = async (req, res, next) => {
 
 export const getPropertiesByOwner = async (req, res, next) => {
   try {
-    if (isDemoUser(req.user) || !isDbConnected()) {
+    if (isDemoModeEnabled() && (isDemoUser(req.user) || !isDbConnected())) {
       let properties = getDemoPropertiesForUser();
       const { status, search } = req.query;
       if (status && status !== 'all') {
@@ -207,7 +208,7 @@ export const getPropertiesByOwner = async (req, res, next) => {
 
     res.json({ success: true, data: properties, count: properties.length });
   } catch (error) {
-    if (isDemoUser(req.user)) {
+    if (isDemoModeEnabled() && isDemoUser(req.user)) {
       const properties = getDemoPropertiesForUser();
       return res.json({ success: true, data: properties, count: properties.length, demo: true });
     }
@@ -250,7 +251,7 @@ export const searchProperty = async (req, res, next) => {
       }
     }
 
-    if (!property) {
+    if (!property && isDemoModeEnabled()) {
       const demoProperty = findDemoProperty({ propertyId, surveyNumber });
       if (demoProperty) {
         property = demoProperty;
@@ -691,7 +692,7 @@ export const uploadDocument = async (req, res, next) => {
     const ipfsHash = await uploadToIPFS(req.file.path, req.file.originalname);
     fs.unlinkSync(req.file.path);
 
-    if (isDemoUser(req.user) || !isDbConnected()) {
+    if (isDemoModeEnabled() && (isDemoUser(req.user) || !isDbConnected())) {
       const demoProp = findDemoProperty({ propertyId });
       if (!demoProp) {
         return res.status(404).json({ success: false, message: 'Property not found' });
@@ -740,7 +741,7 @@ export const getAllDocuments = async (req, res, next) => {
   try {
     const userId = req.user.id || req.user._id;
 
-    if (isDemoUser(req.user) || !isDbConnected()) {
+    if (isDemoModeEnabled() && (isDemoUser(req.user) || !isDbConnected())) {
       return res.json({
         success: true,
         data: getDemoDocumentsForUser(userId),
@@ -763,7 +764,7 @@ export const getAllDocuments = async (req, res, next) => {
 
     res.json({ success: true, data: documents });
   } catch (error) {
-    if (isDemoUser(req.user)) {
+    if (isDemoModeEnabled() && isDemoUser(req.user)) {
       return res.json({
         success: true,
         data: getDemoDocumentsForUser(req.user.id || req.user._id),
@@ -808,12 +809,14 @@ export const verifyOnBlockchain = async (req, res, next) => {
       });
     }
 
-    const demoVerification = getDemoBlockchainVerification(propertyId, contractAddress);
-    if (demoVerification) {
-      return res.json({
-        success: true,
-        ...demoVerification,
-      });
+    if (isDemoModeEnabled()) {
+      const demoVerification = getDemoBlockchainVerification(propertyId, contractAddress);
+      if (demoVerification) {
+        return res.json({
+          success: true,
+          ...demoVerification,
+        });
+      }
     }
 
     res.json({

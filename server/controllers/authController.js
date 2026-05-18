@@ -4,6 +4,7 @@ import { hashAadhaar, maskAadhaar, validateAadhaar } from '../utils/crypto.js';
 import { generateToken } from '../utils/jwt.js';
 import { ethers } from 'ethers';
 import { isDbConnected } from '../config/db.js';
+import { isDemoModeEnabled } from '../config/appConfig.js';
 import { registerDemoUser, loginDemoUser } from '../services/demoAuthStore.js';
 
 export const registerValidation = [
@@ -68,7 +69,7 @@ export const register = async (req, res, next) => {
     const { fullName, email, phone, aadhaar, password, role } = req.body;
     const cleanAadhaar = aadhaar.replace(/\D/g, '');
 
-    if (!isDbConnected()) {
+    if (!isDbConnected() && isDemoModeEnabled()) {
       const demoResult = await registerDemoUser({
         fullName,
         email,
@@ -96,23 +97,26 @@ export const register = async (req, res, next) => {
         $or: [{ email: email.toLowerCase() }, { aadhaarHash }],
       });
     } catch (dbErr) {
-      console.warn('DB lookup failed, using demo auth:', dbErr.message);
-      const demoResult = await registerDemoUser({
-        fullName,
-        email,
-        phone,
-        aadhaar: cleanAadhaar,
-        password,
-        role,
-      });
-      if (demoResult.error) {
-        return res.status(400).json({ success: false, message: demoResult.error });
+      if (isDemoModeEnabled()) {
+        console.warn('DB lookup failed, using demo auth:', dbErr.message);
+        const demoResult = await registerDemoUser({
+          fullName,
+          email,
+          phone,
+          aadhaar: cleanAadhaar,
+          password,
+          role,
+        });
+        if (demoResult.error) {
+          return res.status(400).json({ success: false, message: demoResult.error });
+        }
+        return res.status(201).json(
+          formatUserResponse(demoResult.user, demoResult.token, {
+            message: 'Registration successful (demo mode)',
+          })
+        );
       }
-      return res.status(201).json(
-        formatUserResponse(demoResult.user, demoResult.token, {
-          message: 'Registration successful (demo mode)',
-        })
-      );
+      throw dbErr;
     }
 
     if (existingUser) {
@@ -143,7 +147,7 @@ export const register = async (req, res, next) => {
 
     res.status(201).json(formatUserResponse(user, token));
   } catch (error) {
-    if (!isDbConnected() || error.name === 'MongooseError' || error.message?.includes('buffering')) {
+    if (isDemoModeEnabled() && (!isDbConnected() || error.name === 'MongooseError' || error.message?.includes('buffering'))) {
       try {
         const { fullName, email, phone, aadhaar, password, role } = req.body;
         const demoResult = await registerDemoUser({
@@ -174,7 +178,7 @@ export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    if (!isDbConnected()) {
+    if (!isDbConnected() && isDemoModeEnabled()) {
       const demoResult = await loginDemoUser({ email, password });
       if (demoResult.error) {
         return res.status(401).json({ success: false, message: demoResult.error });
@@ -190,25 +194,30 @@ export const login = async (req, res, next) => {
     try {
       user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     } catch (dbErr) {
-      const demoResult = await loginDemoUser({ email, password });
-      if (demoResult.error) {
-        return res.status(401).json({ success: false, message: demoResult.error });
-      }
-      return res.json({
-        success: true,
-        message: 'Login successful (demo mode)',
-        data: { token: demoResult.token, user: demoResult.user },
-      });
-    }
-
-    if (!user || !(await user.comparePassword(password))) {
-      const demoResult = await loginDemoUser({ email, password });
-      if (demoResult.user) {
+      if (isDemoModeEnabled()) {
+        const demoResult = await loginDemoUser({ email, password });
+        if (demoResult.error) {
+          return res.status(401).json({ success: false, message: demoResult.error });
+        }
         return res.json({
           success: true,
           message: 'Login successful (demo mode)',
           data: { token: demoResult.token, user: demoResult.user },
         });
+      }
+      throw dbErr;
+    }
+
+    if (!user || !(await user.comparePassword(password))) {
+      if (isDemoModeEnabled()) {
+        const demoResult = await loginDemoUser({ email, password });
+        if (demoResult.user) {
+          return res.json({
+            success: true,
+            message: 'Login successful (demo mode)',
+            data: { token: demoResult.token, user: demoResult.user },
+          });
+        }
       }
       return res.status(401).json({
         success: false,
