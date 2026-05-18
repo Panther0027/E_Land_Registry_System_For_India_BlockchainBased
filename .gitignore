@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+coverage/
+cache/
+artifacts/
+typechain-types/
+contracts/deployments/
+!server/demo-assets/
+uploads/*
+!uploads/.gitkeep

@@ -1,0 +1,96 @@
+{
+  "app": {
+    "name": "Bhumi",
+    "tagline": "Your Land. Your Truth. On Chain.",
+    "description": "India's trusted blockchain land registry"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "properties": "My Properties",
+    "register": "Register Property",
+    "transfer": "Transfer Ownership",
+    "search": "Search & Verify",
+    "documents": "Documents",
+    "notifications": "Notifications",
+    "profile": "Profile",
+    "government": "Official Panel",
+    "about": "About",
+    "howItWorks": "How It Works",
+    "verify": "Verify Land",
+    "login": "Login",
+    "getStarted": "Get Started",
+    "logout": "Logout"
+  },
+  "landing": {
+    "slide1Title": "Register Land Digitally",
+    "slide1Desc": "Securely register your land records on the blockchain with government-grade security.",
+    "slide2Title": "Tamper-Proof Records",
+    "slide2Desc": "Every record is immutable and verifiable. No more forged documents or disputed ownership.",
+    "slide3Title": "Transfer Ownership Instantly",
+    "slide3Desc": "Transfer property ownership securely with blockchain-verified transactions.",
+    "next": "Next",
+    "back": "Back",
+    "skip": "Skip onboarding"
+  },
+  "dashboard": {
+    "greeting": "Namaste, {{name}} 👋",
+    "subtitle": "Here's your land registry overview",
+    "totalProperties": "Total Properties",
+    "pendingTransfers": "Pending Transfers",
+    "verifiedDocs": "Verified Documents",
+    "pendingReview": "Pending Review",
+    "verified": "Verified",
+    "disputes": "Active Disputes",
+    "quickActions": "Quick Actions",
+    "recentActivity": "Recent Activity",
+    "noActivity": "No recent activity"
+  },
+  "property": {
+    "register": "Register Property",
+    "myProperties": "My Properties",
+    "details": "Property Details",
+    "raiseDispute": "Raise Dispute",
+    "downloadCert": "Download Certificate",
+    "shareQR": "Share QR Code",
+    "verifyBlockchain": "Verify on Blockchain",
+    "disputeReason": "Describe the dispute reason in detail",
+    "disputeSuccess": "Dispute raised successfully"
+  },
+  "gov": {
+    "panel": "Government Official Panel",
+    "verifierPanel": "Verifier Panel",
+    "pendingRegistrations": "Pending Registrations",
+    "disputedProperties": "Disputed Properties",
+    "analytics": "Registry Analytics",
+    "approve": "Approve",
+    "reject": "Reject",
+    "resolve": "Resolve Dispute",
+    "verificationRate": "Verification Rate"
+  },
+  "public": {
+    "heroTitle": "Secure Land Records for Every Indian",
+    "heroSubtitle": "Register, verify, and transfer property ownership on the blockchain — transparent, tamper-proof, and trusted.",
+    "verifyNow": "Verify a Property",
+    "learnMore": "Learn How It Works",
+    "statsProperties": "Properties Registered",
+    "statsVerified": "Verified Records",
+    "statsStates": "States Covered",
+    "statsTransactions": "Blockchain Transactions",
+    "featuresTitle": "Why Bhumi?",
+    "trustTitle": "Trusted by Design"
+  },
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "search": "Search",
+    "notFound": "Page Not Found",
+    "goHome": "Go to Home",
+    "error": "Something went wrong",
+    "retry": "Try Again",
+    "connectWallet": "Connect MetaMask",
+    "walletConnected": "Wallet Connected",
+    "copyAddress": "Copy Address"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "app": {
+    "name": "भूमि",
+    "tagline": "आपकी ज़मीन। आपका सत्य। ब्लॉकचेन पर।",
+    "description": "भारत की विश्वसनीय ब्लॉकचेन भूमि रजistry"
+  },
+  "nav": {
+    "dashboard": "डैशबोर्ड",
+    "properties": "मेरी संपत्तियाँ",
+    "register": "संपत्ति पंजीकरण",
+    "transfer": "स्वामित्व हस्तांतरण",
+    "search": "खोज और सत्यापन",
+    "documents": "दस्तावेज़",
+    "notifications": "सूचनाएँ",
+    "profile": "प्रोफ़ाइल",
+    "government": "अधिकारी पैनल",
+    "about": "हमारे बारे में",
+    "howItWorks": "यह कैसे काम करता है",
+    "verify": "भूमि सत्यापित करें",
+    "login": "लॉगिन",
+    "getStarted": "शुरू करें",
+    "logout": "लॉगआउट"
+  },
+  "landing": {
+    "slide1Title": "डिजिटल भूमि पंजीकरण",
+    "slide1Desc": "सरकारी-स्तर की सुरक्षा के साथ ब्लॉकचेन पर अपने भूमि रिकॉर्ड सुरक्षित रूप से पंजीकृत करें।",
+    "slide2Title": "छेड़छाड़-रोधी रिकॉर्ड",
+    "slide2Desc": "हर रिकॉर्ड अपरिवर्तनीय और सत्यापन योग्य है। नकली दस्तावेज़ या विवादित स्वामित्व नहीं।",
+    "slide3Title": "तुरंत स्वामित्व हस्तांतरण",
+    "slide3Desc": "ब्लॉकचेन-सत्यापित लेनदेन के साथ संपत्ति का स्वामित्व सुरक्षित रूप से हस्तांतरित करें।",
+    "next": "आगे",
+    "back": "पीछे",
+    "skip": "छोड़ें"
+  },
+  "dashboard": {
+    "greeting": "नमस्ते, {{name}} 👋",
+    "subtitle": "आपका भूमि रजistry अवलोकन",
+    "totalProperties": "कुल संपत्तियाँ",
+    "pendingTransfers": "लंबित हस्तांतरण",
+    "verifiedDocs": "सत्यापित दस्तावेज़",
+    "pendingReview": "समीक्षा लंबित",
+    "verified": "सत्यापित",
+    "disputes": "सक्रिय विवाद",
+    "quickActions": "त्वरित कार्य",
+    "recentActivity": "हाल की गतिविधि",
+    "noActivity": "कोई हालिया गतिविधि नहीं"
+  },
+  "property": {
+    "register": "संपत्ति पंजीकरण",
+    "myProperties": "मेरी संपत्तियाँ",
+    "details": "संपत्ति विवरण",
+    "raiseDispute": "विवाद दर्ज करें",
+    "downloadCert": "प्रमाणपत्र डाउनलोड",
+    "shareQR": "QR कोड साझा करें",
+    "verifyBlockchain": "ब्लॉकचेन पर सत्यापित करें",
+    "disputeReason": "विवाद का कारण विस्तार से बताएं",
+    "disputeSuccess": "विवाद सफलतापूर्वक दर्ज"
+  },
+  "gov": {
+    "panel": "सरकारी अधिकारी पैनल",
+    "verifierPanel": "सत्यापनकर्ता पैनल",
+    "pendingRegistrations": "लंबित पंजीकरण",
+    "disputedProperties": "विवादित संपत्तियाँ",
+    "analytics": "रजistry विश्लेषण",
+    "approve": "अनुमोदित",
+    "reject": "अस्वीकार",
+    "resolve": "विवाद समाधान",
+    "verificationRate": "सत्यापन दर"
+  },
+  "public": {
+    "heroTitle": "हर भारतीय के लिए सुरक्षित भूमि रिकॉर्ड",
+    "heroSubtitle": "ब्लॉकचेन पर संपत्ति का पंजीकरण, सत्यापन और हस्तांतरण — पारदर्शी, छेड़छाड़-रोधी और विश्वसनीय।",
+    "verifyNow": "संपत्ति सत्यापित करें",
+    "learnMore": "यह कैसे काम करता है",
+    "statsProperties": "पंजीकृत संपत्तियाँ",
+    "statsVerified": "सत्यापित रिकॉर्ड",
+    "statsStates": "राज्य कवर",
+    "statsTransactions": "ब्लॉकचेन लेनदेन",
+    "featuresTitle": "भूमि क्यों?",
+    "trustTitle": "डिज़ाइन द्वारा विश्वसनीय"
+  },
+  "common": {
+    "loading": "लोड हो रहा है...",
+    "save": "सहेजें",
+    "cancel": "रद्द करें",
+    "confirm": "पुष्टि करें",
+    "search": "खोजें",
+    "notFound": "पृष्ठ नहीं मिला",
+    "goHome": "होम पर जाएं",
+    "error": "कुछ गलत हो गया",
+    "retry": "पुनः प्रयास",
+    "connectWallet": "MetaMask कनेक्ट करें",
+    "walletConnected": "वॉलेट कनेक्ट",
+    "copyAddress": "पता कॉपी करें"
+  }
+}

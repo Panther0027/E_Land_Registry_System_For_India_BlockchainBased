@@ -1,0 +1,16 @@
+{
+  "name": "bhumi",
+  "version": "1.0.0",
+  "description": "Bhumi - Blockchain Land Registry System for India",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix contracts && npm install --prefix server && npm install --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "seed": "npm run seed --prefix server",
+    "compile": "npm run compile --prefix contracts",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:seed": "docker-compose exec server npm run seed"
+  }
+}
