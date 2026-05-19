@@ -73,7 +73,8 @@ const run = async () => {
     process.env.DATASET_XLSX_PATH ||
     path.join(__dirname, '..', '..', 'data', 'land_registry_dataset_10000.xlsx');
 
-  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/bhumi');
+  const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bhumi';
+  await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
   console.log('Connected to MongoDB');
   console.log('Reading dataset:', datasetPath);
 
@@ -118,15 +119,21 @@ const run = async () => {
   if (process.env.REGISTRY_PRIMARY_EMAIL) {
     const aadhaar = (process.env.REGISTRY_PRIMARY_AADHAAR || generateAadhaarFromSeed('primary')).replace(/\D/g, '');
     primaryUser = await User.create({
-      fullName: process.env.REGISTRY_PRIMARY_FULL_NAME || 'Primary Registry Owner',
-      email: process.env.REGISTRY_PRIMARY_EMAIL.toLowerCase(),
+      fullName: (process.env.REGISTRY_PRIMARY_FULL_NAME || 'Primary Registry Owner').trim(),
+      email: process.env.REGISTRY_PRIMARY_EMAIL.toLowerCase().trim(),
       phone: process.env.REGISTRY_PRIMARY_PHONE || '9876543210',
       aadhaarHash: hashAadhaar(aadhaar),
       aadhaarLast4: aadhaar.slice(-4),
       password: process.env.REGISTRY_PRIMARY_PASSWORD || DEFAULT_PASSWORD,
       role: 'owner',
       walletAddress: ethers.Wallet.createRandom().address,
-      avatarInitials: 'PO',
+      avatarInitials: (process.env.REGISTRY_PRIMARY_FULL_NAME || 'PO')
+        .trim()
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2),
     });
     console.log(`Primary owner: ${primaryUser.email} (all ${rows.length} properties)`);
   }

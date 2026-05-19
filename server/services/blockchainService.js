@@ -50,6 +50,7 @@ export const getPropertyFromChain = async (propertyId) => {
 
   try {
     const result = await contract.getProperty(propertyId);
+    if (!result[0]) return null;
     return {
       propertyId: result[0],
       ownerAadhaar: result[1],

@@ -2,7 +2,8 @@ import Property from '../models/Property.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
-import { hashAadhaar, generatePropertyId } from '../utils/crypto.js';
+import { hashAadhaar } from '../utils/crypto.js';
+import { resolvePropertyId } from '../utils/propertyId.js';
 import { uploadToIPFS, uploadJSONToIPFS, getIPFSUrl } from '../config/pinata.js';
 import {
   registerPropertyOnChain,
@@ -18,14 +19,58 @@ import { generateLandCertificate } from '../services/certificateService.js';
 import { findDemoProperty, DEMO_PUBLIC_STATS, getDemoBlockchainVerification } from '../data/demoProperties.js';
 import {
   isDemoUser,
-  getDemoPropertiesForUser,
   getDemoDocumentsForUser,
   addDemoDocumentUpload,
 } from '../data/demoDocuments.js';
+import {
+  addDemoProperty,
+  getDemoPropertiesForUser,
+} from '../data/demoPropertyStore.js';
 import { getContract } from '../config/blockchain.js';
 import { isDbConnected } from '../config/db.js';
-import { isDemoModeEnabled } from '../config/appConfig.js';
+import { isDemoModeEnabled, isOfflineMode } from '../config/appConfig.js';
 import fs from 'fs';
+
+const registerOnChainWithRetry = async (resolveId, ownerAadhaarHash, location, area, ipfsHash) => {
+  let propertyId = await resolveId();
+  const maxAttempts = 5;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return {
+        propertyId,
+        ...(await registerPropertyOnChain(propertyId, ownerAadhaarHash, location, area, ipfsHash)),
+      };
+    } catch (error) {
+      const msg = `${error.reason || ''} ${error.message || ''}`;
+      if (msg.includes('already exists')) {
+        propertyId = await resolveId();
+        continue;
+      }
+      if (process.env.NODE_ENV !== 'production' || isOfflineMode()) {
+        return {
+          propertyId,
+          txHash: `0xlocal${Date.now().toString(16)}`,
+          mock: true,
+        };
+      }
+      throw error;
+    }
+  }
+
+  const err = new Error('Could not register on blockchain after several attempts. Leave Property ID empty and try again.');
+  err.statusCode = 400;
+  throw err;
+};
+
+const safeUploadToIPFS = async (filePath, fileName) => {
+  try {
+    return await uploadToIPFS(filePath, fileName);
+  } catch (error) {
+    console.warn('IPFS upload failed, using local mock hash:', error.message);
+    return `QmLocal${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+  }
+};
 
 export const registerProperty = async (req, res, next) => {
   try {
@@ -43,41 +88,66 @@ export const registerProperty = async (req, res, next) => {
       coOwnerAadhaar,
     } = req.body;
 
-    const propertyId = req.body.propertyId || generatePropertyId();
-    const ownerAadhaarHash = hashAadhaar(ownerAadhaar);
+    const userId = req.user._id ?? req.user.id;
+    const saveInMemory = !isDbConnected() || isDemoUser(req.user);
+
+    if (!surveyNumber?.trim()) {
+      return res.status(400).json({ success: false, message: 'Survey number is required' });
+    }
+    if (!ownerAadhaar?.trim()) {
+      return res.status(400).json({ success: false, message: 'Owner Aadhaar is required' });
+    }
+    if (!ownerName?.trim()) {
+      return res.status(400).json({ success: false, message: 'Owner name is required' });
+    }
+
+    const cleanAadhaar = ownerAadhaar.replace(/\D/g, '');
+    const ownerAadhaarHash = hashAadhaar(cleanAadhaar);
+    let customPropertyId = req.body.propertyId?.trim() || '';
+    const resolveNextId = async () => {
+      const id = await resolvePropertyId(customPropertyId || undefined);
+      customPropertyId = '';
+      return id;
+    };
 
     const documents = [];
     let combinedIpfsHash = '';
 
     if (req.files?.landDeed?.[0]) {
       const file = req.files.landDeed[0];
-      const hash = await uploadToIPFS(file.path, file.originalname);
+      const hash = await safeUploadToIPFS(file.path, file.originalname);
       documents.push({ name: file.originalname, type: 'deed', ipfsHash: hash });
       fs.unlinkSync(file.path);
     }
 
     if (req.files?.ownershipProof?.[0]) {
       const file = req.files.ownershipProof[0];
-      const hash = await uploadToIPFS(file.path, file.originalname);
+      const hash = await safeUploadToIPFS(file.path, file.originalname);
       documents.push({ name: file.originalname, type: 'ownership_proof', ipfsHash: hash });
       fs.unlinkSync(file.path);
     }
 
-    if (documents.length > 0) {
-      combinedIpfsHash = await uploadJSONToIPFS({
-        propertyId,
-        documents: documents.map((d) => ({ name: d.name, type: d.type, hash: d.ipfsHash })),
-      });
-    }
-
     const location = `${district}, ${state} - ${pincode}`;
-    const chainResult = await registerPropertyOnChain(
-      propertyId,
+    const chainResult = await registerOnChainWithRetry(
+      resolveNextId,
       ownerAadhaarHash,
       location,
       parseFloat(area),
       combinedIpfsHash
     );
+    const propertyId = chainResult.propertyId;
+
+    if (documents.length > 0) {
+      try {
+        combinedIpfsHash = await uploadJSONToIPFS({
+          propertyId,
+          documents: documents.map((d) => ({ name: d.name, type: d.type, hash: d.ipfsHash })),
+        });
+      } catch (error) {
+        console.warn('IPFS metadata upload failed:', error.message);
+        combinedIpfsHash = documents[0]?.ipfsHash || '';
+      }
+    }
 
     const coOwners = [];
     if (hasCoOwner === 'true' && coOwnerName && coOwnerAadhaar) {
@@ -85,6 +155,38 @@ export const registerProperty = async (req, res, next) => {
         name: coOwnerName,
         aadhaarHash: hashAadhaar(coOwnerAadhaar),
         aadhaarLast4: coOwnerAadhaar.replace(/\s/g, '').slice(-4),
+      });
+    }
+
+    if (saveInMemory) {
+      const property = addDemoProperty(userId, {
+        propertyId,
+        surveyNumber,
+        ownerName,
+        district,
+        state,
+        pincode,
+        area: parseFloat(area),
+        landType,
+        status: 'pending',
+        ipfsHash: combinedIpfsHash,
+        documents,
+        transactionHash: chainResult.txHash,
+        coOwners,
+        blockchainVerified: !chainResult.mock,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: isOfflineMode()
+          ? 'Property registered (offline mode — connect MongoDB for permanent storage)'
+          : 'Property registered successfully',
+        data: {
+          property,
+          transactionHash: chainResult.txHash,
+          ipfsUrl: combinedIpfsHash ? getIPFSUrl(combinedIpfsHash) : null,
+          demo: isOfflineMode() || isDemoUser(req.user),
+        },
       });
     }
 
@@ -106,25 +208,29 @@ export const registerProperty = async (req, res, next) => {
       transactionHash: chainResult.txHash,
     });
 
-    await createTransactionRecord({
-      propertyId,
-      property: property._id,
-      txHash: chainResult.txHash,
-      actionType: 'REGISTER',
-      initiatedBy: req.user._id,
-      blockNumber: chainResult.blockNumber,
-      gasUsed: chainResult.gasUsed,
-    });
+    try {
+      await createTransactionRecord({
+        propertyId,
+        property: property._id,
+        txHash: chainResult.txHash,
+        actionType: 'REGISTER',
+        initiatedBy: req.user._id,
+        blockNumber: chainResult.blockNumber,
+        gasUsed: chainResult.gasUsed,
+      });
 
-    const officials = await User.find({ role: 'government_official' });
-    for (const official of officials) {
-      await createNotification(
-        official._id,
-        'property_registered',
-        'New Property Registration',
-        `Property ${propertyId} registered in ${district}, ${state} and awaiting verification.`,
-        propertyId
-      );
+      const officials = await User.find({ role: 'government_official' });
+      for (const official of officials) {
+        await createNotification(
+          official._id,
+          'property_registered',
+          'New Property Registration',
+          `Property ${propertyId} registered in ${district}, ${state} and awaiting verification.`,
+          propertyId
+        );
+      }
+    } catch (dbErr) {
+      console.warn('Post-register DB writes skipped:', dbErr.message);
     }
 
     res.status(201).json({
@@ -173,8 +279,9 @@ export const getProperty = async (req, res, next) => {
 
 export const getPropertiesByOwner = async (req, res, next) => {
   try {
-    if (isDemoModeEnabled() && (isDemoUser(req.user) || !isDbConnected())) {
-      let properties = getDemoPropertiesForUser();
+    if (isDemoUser(req.user) || !isDbConnected()) {
+      const userId = req.user._id ?? req.user.id;
+      let properties = getDemoPropertiesForUser(userId);
       const { status, search } = req.query;
       if (status && status !== 'all') {
         properties = properties.filter((p) => p.status === status);
@@ -209,7 +316,8 @@ export const getPropertiesByOwner = async (req, res, next) => {
     res.json({ success: true, data: properties, count: properties.length });
   } catch (error) {
     if (isDemoModeEnabled() && isDemoUser(req.user)) {
-      const properties = getDemoPropertiesForUser();
+      const userId = req.user._id ?? req.user.id;
+      const properties = getDemoPropertiesForUser(userId);
       return res.json({ success: true, data: properties, count: properties.length, demo: true });
     }
     next(error);
@@ -631,8 +739,34 @@ export const generateCertificate = async (req, res, next) => {
 
 export const getDashboardStats = async (req, res, next) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user._id ?? req.user.id;
     const role = req.user.role;
+
+    if (isDemoUser(req.user) || !isDbConnected()) {
+      const props = getDemoPropertiesForUser(userId);
+      const ownerPayload = {
+        role: 'owner',
+        totalProperties: props.length,
+        pendingTransfers: props.filter((p) => p.status === 'transferred').length,
+        verifiedDocuments: props.filter((p) => p.status === 'verified').length,
+        recentActivity: [],
+        demo: true,
+      };
+      if (role === 'government_official' || role === 'verifier') {
+        return res.json({
+          success: true,
+          data: {
+            role,
+            pendingCount: DEMO_PUBLIC_STATS.totalProperties,
+            verifiedCount: DEMO_PUBLIC_STATS.verifiedCount,
+            disputedCount: 0,
+            recentActivity: [],
+            demo: true,
+          },
+        });
+      }
+      return res.json({ success: true, data: ownerPayload });
+    }
 
     if (role === 'government_official' || role === 'verifier') {
       const [pendingCount, verifiedCount, disputedCount, recentTransactions] = await Promise.all([
@@ -692,7 +826,7 @@ export const uploadDocument = async (req, res, next) => {
     const ipfsHash = await uploadToIPFS(req.file.path, req.file.originalname);
     fs.unlinkSync(req.file.path);
 
-    if (isDemoModeEnabled() && (isDemoUser(req.user) || !isDbConnected())) {
+    if (isDemoUser(req.user) || !isDbConnected()) {
       const demoProp = findDemoProperty({ propertyId });
       if (!demoProp) {
         return res.status(404).json({ success: false, message: 'Property not found' });
@@ -741,7 +875,7 @@ export const getAllDocuments = async (req, res, next) => {
   try {
     const userId = req.user.id || req.user._id;
 
-    if (isDemoModeEnabled() && (isDemoUser(req.user) || !isDbConnected())) {
+    if (isDemoUser(req.user) || !isDbConnected()) {
       return res.json({
         success: true,
         data: getDemoDocumentsForUser(userId),

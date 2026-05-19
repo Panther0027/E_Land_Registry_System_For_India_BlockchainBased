@@ -1,5 +1,4 @@
 import { getIPFSUrl } from '../config/pinata.js';
-import { DEMO_PROPERTIES } from './demoProperties.js';
 
 const now = Date.now();
 
@@ -48,13 +47,7 @@ const userUploads = new Map();
 export const isDemoUser = (user) =>
   String(user?.id || user?._id || '').startsWith('demo:');
 
-export const getDemoPropertiesForUser = () =>
-  DEMO_PROPERTIES.map((p) => ({
-    ...p,
-    _id: `demo-prop-${p.propertyId}`,
-    ownerName: p.ownerName,
-    documents: DEMO_SAMPLE_DOCUMENTS.filter((d) => d.propertyId === p.propertyId),
-  }));
+export { getDemoPropertiesForUser } from './demoPropertyStore.js';
 
 export const getDemoDocumentsForUser = (userId) => {
   const uploads = userUploads.get(userId) || [];

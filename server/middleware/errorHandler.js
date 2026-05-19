@@ -10,6 +10,13 @@ export const errorHandler = (err, req, res, next) => {
 
   if (err.code === 11000) {
     const field = Object.keys(err.keyValue)[0];
+    const value = err.keyValue[field];
+    if (field === 'propertyId') {
+      return res.status(400).json({
+        success: false,
+        message: `Property ID "${value}" is already registered. Leave the Property ID field empty to get a new unique ID automatically.`,
+      });
+    }
     return res.status(400).json({
       success: false,
       message: `${field} already exists.`,
@@ -28,7 +35,8 @@ export const errorHandler = (err, req, res, next) => {
     return res.status(400).json({ success: false, message: err.message });
   }
 
-  res.status(err.statusCode || 500).json({
+  const status = err.statusCode || 500;
+  res.status(status).json({
     success: false,
     message: err.message || 'Internal server error',
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),

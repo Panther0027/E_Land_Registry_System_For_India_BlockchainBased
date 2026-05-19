@@ -8,7 +8,7 @@ const aadhaarField = z
     message: 'Enter valid 12-digit Aadhaar (XXXX-XXXX-XXXX)',
   })
   .refine((val) => validateAadhaar(val), {
-    message: 'Invalid Aadhaar checksum — use demo: 2345-6789-0124',
+    message: 'Enter a valid 12-digit Aadhaar number',
   });
 
 export const registerSchema = z.object({

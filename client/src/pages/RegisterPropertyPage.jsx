@@ -37,7 +37,9 @@ const RegisterPropertyPage = () => {
     try {
       const fd = new FormData();
       Object.entries(formData).forEach(([k, v]) => {
-        if (v !== undefined && v !== null) fd.append(k, v);
+        if (v === undefined || v === null || v === '') return;
+        if (k === 'propertyId' && !String(v).trim()) return;
+        fd.append(k, v);
       });
       if (files.landDeed) fd.append('landDeed', files.landDeed);
       if (files.ownershipProof) fd.append('ownershipProof', files.ownershipProof);
@@ -47,7 +49,8 @@ const RegisterPropertyPage = () => {
       setStep(4);
       toast.success('Property registered on blockchain!');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Registration failed');
+      const msg = err.response?.data?.message || err.message || 'Registration failed';
+      toast.error(msg, { duration: 6000 });
     } finally {
       setLoading(false);
     }
@@ -105,7 +108,12 @@ const RegisterPropertyPage = () => {
           {step === 0 && (
             <motion.form key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
               onSubmit={step1Form.handleSubmit(handleStep1)} className="space-y-4">
-              <Input label="Property ID (optional)" placeholder="Auto-generated if empty" {...step1Form.register('propertyId')} />
+              <Input
+                label="Property ID (optional)"
+                placeholder="Leave empty — a unique ID is created for you"
+                hint="Do not reuse BH-001, BH-MY-001, or LR- IDs from demos or past attempts"
+                {...step1Form.register('propertyId')}
+              />
               <Input label="Survey Number" error={step1Form.formState.errors.surveyNumber?.message} {...step1Form.register('surveyNumber')} />
               <div className="grid grid-cols-2 gap-4">
                 <Input label="District" error={step1Form.formState.errors.district?.message} {...step1Form.register('district')} />

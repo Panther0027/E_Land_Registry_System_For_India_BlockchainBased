@@ -83,7 +83,23 @@ Open **http://localhost** (port 80)
 - [panther0027/bhumi-land-registry-api](https://hub.docker.com/r/panther0027/bhumi-land-registry-api)
 - [panther0027/bhumi-land-registry-web](https://hub.docker.com/r/panther0027/bhumi-land-registry-web)
 
-See **[DEMO_GUIDE.md](./DEMO_GUIDE.md)** for presentation walkthrough (register property, transfer, documents).
+See **[PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md)** for Docker + **your real login** with 10,000 imported properties.
+
+See **[DEMO_GUIDE.md](./DEMO_GUIDE.md)** for presentation walkthrough.
+
+### Dataset (10,000 real records)
+
+The file `data/land_registry_dataset_10000.xlsx` is imported into MongoDB with property IDs like **`LR-7D185238`**.
+
+Set in `.env` before import/Docker:
+
+```env
+REGISTRY_PRIMARY_EMAIL=your@gmail.com
+REGISTRY_PRIMARY_PASSWORD=YourPass@123
+ENABLE_DEMO_MODE=false
+```
+
+Then all 10,000 properties are assigned to **your email** for login, transfer, verify, and documents.
 
 ---
 

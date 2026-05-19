@@ -13,12 +13,14 @@ const PORT = process.env.PORT || 5000;
 
 const start = async () => {
   const dbOk = await connectDB();
-  if (isDemoModeEnabled() && !dbOk) {
-    await initBuiltinDemoAccounts();
-    console.warn('⚠️  Demo mode: in-memory auth (MongoDB not connected).');
-  } else if (!dbOk) {
-    console.error('❌ MongoDB required. Set MONGODB_URI and start MongoDB (or use Docker).');
-    console.error('   Demo mode disabled. Set ENABLE_DEMO_MODE=true only for offline demos.');
+  if (!dbOk) {
+    if (isDemoModeEnabled()) {
+      process.env.BHUMI_OFFLINE_MODE = '1';
+      await initBuiltinDemoAccounts();
+      console.warn('⚠️  MongoDB offline — demo mode enabled.');
+    } else {
+      console.error('❌ MongoDB required. Fix MONGODB_URI / Atlas IP whitelist, then restart.');
+    }
   } else {
     console.log('✓ MongoDB connected — production mode (real accounts & dataset).');
   }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -12,7 +12,8 @@ import Select from '../components/ui/Select';
 import { ConfirmModal } from '../components/ui/Modal';
 import { transferSchema } from '../utils/validation';
 import { formatAadhaarInput } from '../utils';
-import { propertyAPI } from '../services';
+import { propertyAPI, authAPI } from '../services';
+import { validateAadhaar } from '../utils';
 import { SEPOLIA_EXPLORER } from '../constants';
 
 const TransferOwnershipPage = () => {
@@ -23,6 +24,8 @@ const TransferOwnershipPage = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [formValues, setFormValues] = useState(null);
+  const [recipientName, setRecipientName] = useState('');
+  const [lookupError, setLookupError] = useState('');
 
   const { data: properties } = useQuery({
     queryKey: ['my-properties-transfer'],
@@ -37,6 +40,35 @@ const TransferOwnershipPage = () => {
     const prop = searchParams.get('property');
     if (prop) setValue('propertyId', prop);
   }, [searchParams, setValue]);
+
+  const lookupRecipient = useCallback(async (aadhaarRaw) => {
+    const digits = aadhaarRaw.replace(/\D/g, '');
+    if (digits.length !== 12 || !validateAadhaar(digits)) {
+      setRecipientName('');
+      setLookupError('');
+      return;
+    }
+    try {
+      const res = await authAPI.lookupOwnerByAadhaar(digits);
+      setRecipientName(res.data.data.fullName);
+      setLookupError('');
+    } catch (err) {
+      setRecipientName('');
+      setLookupError(err.response?.data?.message || 'Recipient not found');
+    }
+  }, []);
+
+  const newOwnerAadhaar = watch('newOwnerAadhaar');
+
+  useEffect(() => {
+    if (!newOwnerAadhaar) {
+      setRecipientName('');
+      setLookupError('');
+      return;
+    }
+    const t = setTimeout(() => lookupRecipient(newOwnerAadhaar), 400);
+    return () => clearTimeout(t);
+  }, [newOwnerAadhaar, lookupRecipient]);
 
   const sendOtp = () => {
     setOtpSent(true);
@@ -105,6 +137,14 @@ const TransferOwnershipPage = () => {
           onChange={(e) => setValue('newOwnerAadhaar', formatAadhaarInput(e.target.value), { shouldValidate: true })}
           error={errors.newOwnerAadhaar?.message}
         />
+        {recipientName && (
+          <p className="text-sm text-success font-medium bg-success/10 rounded-lg px-3 py-2">
+            New owner (from database): <strong>{recipientName}</strong>
+          </p>
+        )}
+        {lookupError && !recipientName && (
+          <p className="text-sm text-error bg-red-50 rounded-lg px-3 py-2">{lookupError}</p>
+        )}
         <Input label="Transfer Reason" error={errors.transferReason?.message} {...register('transferReason')} />
 
         {!otpSent ? (

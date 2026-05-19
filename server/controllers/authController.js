@@ -3,16 +3,40 @@ import User from '../models/User.js';
 import { hashAadhaar, maskAadhaar, validateAadhaar } from '../utils/crypto.js';
 import { generateToken } from '../utils/jwt.js';
 import { ethers } from 'ethers';
+import { isDemoModeEnabled, isOfflineMode } from '../config/appConfig.js';
 import { isDbConnected } from '../config/db.js';
-import { isDemoModeEnabled } from '../config/appConfig.js';
+import { ensureDbConnection } from '../utils/ensureDb.js';
+
 import { registerDemoUser, loginDemoUser } from '../services/demoAuthStore.js';
+
+const allowDemoAuth = () => isDemoModeEnabled() || isOfflineMode();
+
+const dbUnavailableResponse = (res) =>
+  res.status(503).json({
+    success: false,
+    message:
+      'Database is not available. Start MongoDB (or run: docker compose up -d) and try again.',
+  });
+
+const toAuthUser = (user) => ({
+  id: user._id ?? user.id,
+  fullName: user.fullName,
+  email: user.email,
+  phone: user.phone,
+  aadhaarMasked: user.aadhaarMasked ?? maskAadhaar(user.aadhaarLast4),
+  role: user.role,
+  walletAddress: user.walletAddress || '',
+  avatarInitials:
+    user.avatarInitials ||
+    user.fullName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2),
+});
 
 export const registerValidation = [
   body('fullName').trim().notEmpty().withMessage('Full name is required'),
   body('email').isEmail().withMessage('Valid email is required'),
   body('phone').matches(/^[6-9]\d{9}$/).withMessage('Valid 10-digit Indian phone required'),
   body('aadhaar').custom((value) => {
-    if (!validateAadhaar(value)) throw new Error('Invalid Aadhaar number');
+    if (!validateAadhaar(value)) throw new Error('Enter a valid 12-digit Aadhaar number');
     return true;
   }),
   body('password')
@@ -68,40 +92,15 @@ export const register = async (req, res, next) => {
   try {
     const { fullName, email, phone, aadhaar, password, role } = req.body;
     const cleanAadhaar = aadhaar.replace(/\D/g, '');
+    const normalizedEmail = email.trim().toLowerCase();
 
-    if (!isDbConnected() && isDemoModeEnabled()) {
-      const demoResult = await registerDemoUser({
-        fullName,
-        email,
-        phone,
-        aadhaar: cleanAadhaar,
-        password,
-        role,
-      });
-      if (demoResult.error) {
-        return res.status(400).json({ success: false, message: demoResult.error });
-      }
-      return res.status(201).json(
-        formatUserResponse(demoResult.user, demoResult.token, {
-          message: 'Registration successful (demo mode — MongoDB not connected)',
-        })
-      );
-    }
+    const dbReady = await ensureDbConnection();
 
-    const aadhaarHash = hashAadhaar(cleanAadhaar);
-    const aadhaarLast4 = cleanAadhaar.slice(-4);
-
-    let existingUser = null;
-    try {
-      existingUser = await User.findOne({
-        $or: [{ email: email.toLowerCase() }, { aadhaarHash }],
-      });
-    } catch (dbErr) {
-      if (isDemoModeEnabled()) {
-        console.warn('DB lookup failed, using demo auth:', dbErr.message);
+    if (!dbReady) {
+      if (allowDemoAuth()) {
         const demoResult = await registerDemoUser({
           fullName,
-          email,
+          email: normalizedEmail,
           phone,
           aadhaar: cleanAadhaar,
           password,
@@ -112,64 +111,61 @@ export const register = async (req, res, next) => {
         }
         return res.status(201).json(
           formatUserResponse(demoResult.user, demoResult.token, {
-            message: 'Registration successful (demo mode)',
+            message: 'Account created (offline demo — connect MongoDB for permanent storage)',
           })
         );
       }
-      throw dbErr;
+      return dbUnavailableResponse(res);
     }
 
+    const aadhaarHash = hashAadhaar(cleanAadhaar);
+    const aadhaarLast4 = cleanAadhaar.slice(-4);
+
+    const existingUser = await User.findOne({
+      $or: [{ email: normalizedEmail }, { aadhaarHash }],
+    });
+
     if (existingUser) {
-      const isEmail = existingUser.email === email.toLowerCase();
+      const isEmail = existingUser.email === normalizedEmail;
       return res.status(400).json({
         success: false,
         message: isEmail
-          ? 'Email already registered — try logging in instead'
-          : 'This Aadhaar is already registered. Use a new Aadhaar or login with your existing account (e.g. rajesh@example.com / Owner@123)',
+          ? 'This email is already registered — please log in instead'
+          : 'This Aadhaar number is already registered — log in or use a different Aadhaar',
       });
     }
 
     const wallet = ethers.Wallet.createRandom();
 
     const user = await User.create({
-      fullName,
-      email,
+      fullName: fullName.trim(),
+      email: normalizedEmail,
       phone,
       aadhaarHash,
       aadhaarLast4,
       password,
       role,
       walletAddress: wallet.address,
-      avatarInitials: fullName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2),
+      avatarInitials: fullName
+        .trim()
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2),
     });
 
     const token = generateToken(user._id, user.role);
 
-    res.status(201).json(formatUserResponse(user, token));
+    res.status(201).json({
+      success: true,
+      message: 'Account created successfully',
+      data: {
+        token,
+        user: toAuthUser(user),
+      },
+    });
   } catch (error) {
-    if (isDemoModeEnabled() && (!isDbConnected() || error.name === 'MongooseError' || error.message?.includes('buffering'))) {
-      try {
-        const { fullName, email, phone, aadhaar, password, role } = req.body;
-        const demoResult = await registerDemoUser({
-          fullName,
-          email,
-          phone,
-          aadhaar: aadhaar.replace(/\D/g, ''),
-          password,
-          role,
-        });
-        if (demoResult.error) {
-          return res.status(400).json({ success: false, message: demoResult.error });
-        }
-        return res.status(201).json(
-          formatUserResponse(demoResult.user, demoResult.token, {
-            message: 'Registration successful (demo mode)',
-          })
-        );
-      } catch {
-        /* fall through */
-      }
-    }
     next(error);
   }
 };
@@ -177,48 +173,28 @@ export const register = async (req, res, next) => {
 export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = email.trim().toLowerCase();
 
-    if (!isDbConnected() && isDemoModeEnabled()) {
-      const demoResult = await loginDemoUser({ email, password });
-      if (demoResult.error) {
-        return res.status(401).json({ success: false, message: demoResult.error });
-      }
-      return res.json({
-        success: true,
-        message: 'Login successful (demo mode)',
-        data: { token: demoResult.token, user: demoResult.user },
-      });
-    }
+    const dbReady = await ensureDbConnection();
 
-    let user;
-    try {
-      user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-    } catch (dbErr) {
-      if (isDemoModeEnabled()) {
-        const demoResult = await loginDemoUser({ email, password });
+    if (!dbReady) {
+      if (allowDemoAuth()) {
+        const demoResult = await loginDemoUser({ email: normalizedEmail, password });
         if (demoResult.error) {
           return res.status(401).json({ success: false, message: demoResult.error });
         }
         return res.json({
           success: true,
-          message: 'Login successful (demo mode)',
+          message: 'Login successful',
           data: { token: demoResult.token, user: demoResult.user },
         });
       }
-      throw dbErr;
+      return dbUnavailableResponse(res);
     }
 
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
+
     if (!user || !(await user.comparePassword(password))) {
-      if (isDemoModeEnabled()) {
-        const demoResult = await loginDemoUser({ email, password });
-        if (demoResult.user) {
-          return res.json({
-            success: true,
-            message: 'Login successful (demo mode)',
-            data: { token: demoResult.token, user: demoResult.user },
-          });
-        }
-      }
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password',
@@ -233,14 +209,7 @@ export const login = async (req, res, next) => {
       data: {
         token,
         user: {
-          id: user._id,
-          fullName: user.fullName,
-          email: user.email,
-          phone: user.phone,
-          aadhaarMasked: maskAadhaar(user.aadhaarLast4),
-          role: user.role,
-          walletAddress: user.walletAddress,
-          avatarInitials: user.avatarInitials,
+          ...toAuthUser(user),
           notificationPreferences: user.notificationPreferences,
           language: user.language,
         },
@@ -326,6 +295,39 @@ export const linkWallet = async (req, res, next) => {
       success: true,
       message: 'Wallet linked successfully',
       data: { walletAddress: user.walletAddress },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Look up a registered user by Aadhaar (for transfer — shows name from database). */
+export const lookupOwnerByAadhaar = async (req, res, next) => {
+  try {
+    const raw = String(req.query.aadhaar || '').replace(/\D/g, '');
+    if (!validateAadhaar(raw)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid 12-digit Aadhaar' });
+    }
+
+    if (!(await ensureDbConnection()) || !isDbConnected()) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database required to look up owners. Connect MongoDB first.',
+      });
+    }
+
+    const aadhaarHash = hashAadhaar(raw);
+    const user = await User.findOne({ aadhaarHash }).select('fullName email role');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'No Bhumi account for this Aadhaar. Ask them to register first.',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { fullName: user.fullName, email: user.email, role: user.role },
     });
   } catch (error) {
     next(error);

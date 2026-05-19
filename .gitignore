@@ -14,3 +14,5 @@ contracts/deployments/
 IMPORTED_CREDENTIALS.txt
 uploads/*
 !uploads/.gitkeep
+data/*.xlsx
+!data/.gitkeep

@@ -30,12 +30,22 @@ const DashboardPage = () => {
   const user = useAuthStore((s) => s.user);
   const isOfficial = user?.role === 'government_official' || user?.role === 'verifier';
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: () => propertyAPI.getDashboardStats().then((r) => r.data.data),
+    retry: 1,
+    placeholderData: {
+      totalProperties: 0,
+      pendingTransfers: 0,
+      verifiedDocuments: 0,
+      pendingCount: 0,
+      verifiedCount: 0,
+      disputedCount: 0,
+      recentActivity: [],
+    },
   });
 
-  if (isLoading) return <DashboardSkeleton />;
+  if (isLoading && !data) return <DashboardSkeleton />;
 
   const ownerStats = [
     { key: 'totalProperties', label: t('dashboard.totalProperties'), icon: HiOutlineHome, color: 'bg-primary/10 text-primary' },
@@ -59,6 +69,11 @@ const DashboardPage = () => {
           {t('dashboard.greeting', { name: user?.fullName?.split(' ')[0] })}
         </h1>
         <p className="text-text-secondary mt-1">{t('dashboard.subtitle')}</p>
+        {isError && (
+          <p className="text-sm text-amber-700 mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Could not load live stats — start the API server (port 5000) and ensure MongoDB is connected.
+          </p>
+        )}
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

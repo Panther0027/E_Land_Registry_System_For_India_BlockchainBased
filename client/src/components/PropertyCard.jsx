@@ -35,6 +35,11 @@ const PropertyCard = ({ property, index = 0 }) => (
         </div>
       </div>
 
+      <p className="mt-3 text-sm">
+        <span className="text-text-secondary">Owner: </span>
+        <span className="font-medium text-text-primary">{property.ownerName}</span>
+      </p>
+
       <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center">
         <span className="text-xs text-text-secondary">Survey: {property.surveyNumber}</span>
         <span className="text-xs text-primary font-medium group-hover:underline">View Details →</span>

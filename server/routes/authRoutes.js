@@ -5,6 +5,7 @@ import {
   getProfile,
   updateProfile,
   linkWallet,
+  lookupOwnerByAadhaar,
   registerValidation,
   loginValidation,
   validate,
@@ -16,6 +17,7 @@ const router = Router();
 router.post('/register', registerValidation, validate, register);
 router.post('/login', loginValidation, validate, login);
 router.get('/profile', protect, getProfile);
+router.get('/lookup-owner', protect, lookupOwnerByAadhaar);
 router.put('/profile', protect, updateProfile);
 router.put('/wallet', protect, linkWallet);
 

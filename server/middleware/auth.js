@@ -33,9 +33,10 @@ export const protect = async (req, res, next) => {
     }
 
     if (!isDbConnected()) {
-      return res.status(401).json({
+      return res.status(503).json({
         success: false,
-        message: 'Session expired. Please register or login again (demo mode).',
+        message:
+          'Database offline. Log out and sign in again (your account is saved in offline mode while MongoDB is disconnected).',
       });
     }
 

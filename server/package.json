@@ -9,6 +9,8 @@
     "dev": "node --watch server.js",
     "seed": "node utils/seed.js",
     "import:dataset": "node scripts/importLandRegistryDataset.js",
+    "assign:owner": "node scripts/assignAllPropertiesToEmail.js",
+    "setup:primary": "node scripts/setupPrimaryOwner.js",
     "seed:blockchain": "node scripts/seedDemoBlockchain.js"
   },
   "dependencies": {

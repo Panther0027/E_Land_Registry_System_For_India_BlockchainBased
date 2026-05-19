@@ -21,6 +21,9 @@ api.interceptors.response.use(
       useAuthStore.getState().logout();
       window.location.href = '/login';
     }
+    if (error.response?.status === 503) {
+      console.warn('API unavailable:', error.response?.data?.message);
+    }
     return Promise.reject(error);
   }
 );

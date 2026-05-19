@@ -6,6 +6,8 @@ export const authAPI = {
   getProfile: () => api.get('/auth/profile'),
   updateProfile: (data) => api.put('/auth/profile', data),
   linkWallet: (data) => api.put('/auth/wallet', data),
+  lookupOwnerByAadhaar: (aadhaar) =>
+    api.get('/auth/lookup-owner', { params: { aadhaar: aadhaar.replace(/\D/g, '') } }),
 };
 
 export const propertyAPI = {

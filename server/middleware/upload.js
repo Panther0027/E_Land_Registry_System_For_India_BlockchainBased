@@ -25,11 +25,13 @@ const fileFilter = (req, file, cb) => {
     'image/jpg',
     'image/png',
     'image/webp',
+    'text/plain',
   ];
-  if (allowedTypes.includes(file.mimetype)) {
+  const isOwnershipProof = file.fieldname === 'ownershipProof';
+  if (allowedTypes.includes(file.mimetype) || (isOwnershipProof && file.mimetype.startsWith('image/'))) {
     cb(null, true);
   } else {
-    cb(new Error('Only PDF and image files are allowed'), false);
+    cb(new Error('Land deed: PDF only. Ownership proof: PDF, image, or text file.'), false);
   }
 };
 

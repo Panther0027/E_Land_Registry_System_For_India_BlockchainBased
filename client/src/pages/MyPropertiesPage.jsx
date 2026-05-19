@@ -16,10 +16,12 @@ const MyPropertiesPage = () => {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('newest');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['my-properties', filter, search, sort],
     queryFn: () =>
       propertyAPI.getMyProperties({ status: filter, search, sort }).then((r) => r.data.data),
+    retry: 1,
+    placeholderData: [],
   });
 
   return (
@@ -72,6 +74,11 @@ const MyPropertiesPage = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {data.map((p, i) => <PropertyCard key={p._id} property={p} index={i} />)}
         </div>
+      ) : isError ? (
+        <EmptyState
+          title="Could not load properties"
+          description="Start the API (cd bhumi/server && npm run dev) and log in again. For 10,000 dataset properties, run import:dataset with REGISTRY_PRIMARY_EMAIL in .env."
+        />
       ) : (
         <EmptyState
           title="No properties found"

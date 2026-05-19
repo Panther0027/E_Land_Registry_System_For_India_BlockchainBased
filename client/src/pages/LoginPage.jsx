@@ -19,65 +19,79 @@ const LoginPage = () => {
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(loginSchema),
-    defaultValues: { rememberMe: false },
+    defaultValues: { rememberMe: true },
   });
 
   const onSubmit = async (data) => {
     setLoading(true);
     try {
-      const res = await authAPI.login(data);
-      setAuth(res.data.data.user, res.data.data.token, data.rememberMe);
-      toast.success(`Namaste, ${res.data.data.user.fullName}!`);
-      navigate('/dashboard');
+      const res = await authAPI.login({ email: data.email, password: data.password });
+      const { user, token } = res.data.data;
+      setAuth(user, token, data.rememberMe);
+      toast.success(`Welcome back, ${user.fullName}!`);
+      navigate('/dashboard', { replace: true });
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Login failed');
+      toast.error(err.response?.data?.message || 'Invalid email or password');
+      if (!err.response) {
+        toast.error('Cannot reach server. Start the backend: cd bhumi/server && npm run dev');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-accent bg-earth-texture flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
-      >
-        <div className="text-center mb-8">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="min-h-screen bg-accent bg-earth-texture flex items-center justify-center p-4"
+    >
+      <motion.div className="w-full max-w-md">
+        <motion.div className="text-center mb-8">
           <Logo className="justify-center mb-4" />
-          <h1 className="font-display text-2xl font-bold text-primary">Welcome Back</h1>
-          <p className="text-text-secondary mt-1">Sign in to your Bhumi account</p>
-        </div>
+          <h1 className="font-display text-2xl font-bold text-primary">Welcome back</h1>
+          <p className="text-text-secondary mt-1">Sign in with the email and password you registered</p>
+        </motion.div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4">
-          <Input label="Email" type="email" icon={HiOutlineMail} error={errors.email?.message} {...register('email')} />
-          <Input label="Password" type="password" icon={HiOutlineLockClosed} error={errors.password?.message} {...register('password')} />
+          <Input
+            label="Email"
+            type="email"
+            icon={HiOutlineMail}
+            placeholder="you@example.com"
+            error={errors.email?.message}
+            {...register('email')}
+          />
+          <Input
+            label="Password"
+            type="password"
+            icon={HiOutlineLockClosed}
+            error={errors.password?.message}
+            {...register('password')}
+          />
 
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
-              <input type="checkbox" className="rounded border-gray-300 text-primary focus:ring-primary" {...register('rememberMe')} />
-              Remember me
-            </label>
-            <Link to="#" className="text-sm text-primary hover:underline">Forgot Password?</Link>
-          </div>
+          <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+            <input
+              type="checkbox"
+              className="rounded border-gray-300 text-primary focus:ring-primary"
+              {...register('rememberMe')}
+            />
+            Keep me signed in
+          </label>
 
-          <Button type="submit" loading={loading} className="w-full">Sign In</Button>
+          <Button type="submit" loading={loading} className="w-full">
+            Sign in
+          </Button>
         </form>
 
         <p className="text-center mt-6 text-text-secondary">
-          Don't have an account?{' '}
-          <Link to="/register" className="text-primary font-semibold hover:underline">Register</Link>
+          New to Bhumi?{' '}
+          <Link to="/register" className="text-primary font-semibold hover:underline">
+            Create an account
+          </Link>
         </p>
-
-        <div className="mt-8 card bg-primary/5 border-primary/10">
-          <p className="text-xs text-text-secondary font-medium mb-2">Demo Accounts:</p>
-          <div className="text-xs text-text-secondary space-y-1">
-            <p>Owner: rajesh@example.com / Owner@123</p>
-            <p>Official: official@bhumi.gov.in / Official@123</p>
-          </div>
-        </div>
       </motion.div>
-    </div>
+    </motion.div>
   );
 };
 

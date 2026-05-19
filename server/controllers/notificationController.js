@@ -1,7 +1,13 @@
 import Notification from '../models/Notification.js';
+import { isDbConnected } from '../config/db.js';
+import { isDemoUser } from '../data/demoDocuments.js';
 
 export const getNotifications = async (req, res, next) => {
   try {
+    if (isDemoUser(req.user) || !isDbConnected()) {
+      return res.json({ success: true, data: [], unreadCount: 0, demo: true });
+    }
+
     const { filter } = req.query;
     const query = { user: req.user._id };
 
@@ -19,6 +25,9 @@ export const getNotifications = async (req, res, next) => {
 
 export const markAsRead = async (req, res, next) => {
   try {
+    if (isDemoUser(req.user) || !isDbConnected()) {
+      return res.json({ success: true, message: 'Notification marked as read' });
+    }
     await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
     res.json({ success: true, message: 'Notification marked as read' });
   } catch (error) {
@@ -28,6 +37,9 @@ export const markAsRead = async (req, res, next) => {
 
 export const markAllAsRead = async (req, res, next) => {
   try {
+    if (isDemoUser(req.user) || !isDbConnected()) {
+      return res.json({ success: true, message: 'All notifications marked as read' });
+    }
     await Notification.updateMany({ user: req.user._id, isRead: false }, { isRead: true });
     res.json({ success: true, message: 'All notifications marked as read' });
   } catch (error) {
