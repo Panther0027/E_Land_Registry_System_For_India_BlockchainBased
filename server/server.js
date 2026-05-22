@@ -37,7 +37,7 @@ const seedOfflineDemoData = async () => {
         landType: 'residential',
         status: 'verified',
         ipfsHash: 'QmDemoHash005',
-        transactionHash: '0xDEMO0005',
+        transactionHash: '0x8888888888888888888888888888888888888888888888888888888888888888',
         blockchainVerified: true,
       },
     },

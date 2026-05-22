@@ -73,7 +73,7 @@ const seedData = async () => {
         landType: 'residential',
         status: 'verified',
         ipfsHash: 'QmSampleHash001',
-        transactionHash: '0xabc123def456789',
+        transactionHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         verifiedBy: official._id,
         verifiedAt: new Date(),
         blockchainVerified: true,
@@ -95,7 +95,7 @@ const seedData = async () => {
         landType: 'agricultural',
         status: 'pending',
         ipfsHash: 'QmSampleHash002',
-        transactionHash: '0xdef456abc789012',
+        transactionHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         documents: [
           { name: 'agricultural_deed.pdf', type: 'deed', ipfsHash: 'QmDeed002' },
         ],
@@ -113,7 +113,7 @@ const seedData = async () => {
         landType: 'commercial',
         status: 'verified',
         ipfsHash: 'QmSampleHash003',
-        transactionHash: '0x789012abc345def',
+        transactionHash: '0x1111111111111111111111111111111111111111111111111111111111111111',
         verifiedBy: official._id,
         verifiedAt: new Date(),
         blockchainVerified: true,
@@ -131,7 +131,7 @@ const seedData = async () => {
         landType: 'agricultural',
         status: 'disputed',
         ipfsHash: 'QmSampleHash004',
-        transactionHash: '0xdispute004hash',
+        transactionHash: '0x2222222222222222222222222222222222222222222222222222222222222222',
         verificationRemarks: 'Boundary dispute with adjacent plot SN-2024-005',
       },
     ]);
@@ -140,7 +140,7 @@ const seedData = async () => {
       {
         propertyId: 'BH-001-KHURDA',
         property: properties[0]._id,
-        txHash: '0xabc123def456789',
+        txHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         actionType: 'REGISTER',
         initiatedBy: owner._id,
         status: 'confirmed',
@@ -148,7 +148,7 @@ const seedData = async () => {
       {
         propertyId: 'BH-001-KHURDA',
         property: properties[0]._id,
-        txHash: '0xverify001hash',
+        txHash: '0x7777777777777777777777777777777777777777777777777777777777777777',
         actionType: 'VERIFY',
         initiatedBy: official._id,
         status: 'confirmed',
@@ -156,7 +156,7 @@ const seedData = async () => {
       {
         propertyId: 'BH-002-CUTTACK',
         property: properties[1]._id,
-        txHash: '0xdef456abc789012',
+        txHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         actionType: 'REGISTER',
         initiatedBy: owner._id,
         status: 'confirmed',

@@ -11,7 +11,7 @@ export const DEMO_PROPERTIES = [
     landType: 'residential',
     status: 'verified',
     ipfsHash: 'QmSampleHash001',
-    transactionHash: '0xabc123def456789',
+    transactionHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     blockchainVerified: true,
   },
   {
@@ -25,7 +25,7 @@ export const DEMO_PROPERTIES = [
     landType: 'agricultural',
     status: 'pending',
     ipfsHash: 'QmSampleHash002',
-    transactionHash: '0xdef456abc789012',
+    transactionHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     blockchainVerified: false,
   },
   {
@@ -39,7 +39,7 @@ export const DEMO_PROPERTIES = [
     landType: 'commercial',
     status: 'verified',
     ipfsHash: 'QmSampleHash003',
-    transactionHash: '0x789012abc345def',
+    transactionHash: '0x1111111111111111111111111111111111111111111111111111111111111111',
     blockchainVerified: true,
   },
   {
@@ -53,7 +53,7 @@ export const DEMO_PROPERTIES = [
     landType: 'agricultural',
     status: 'disputed',
     ipfsHash: 'QmSampleHash004',
-    transactionHash: '0xdispute004hash',
+    transactionHash: '0x2222222222222222222222222222222222222222222222222222222222222222',
     blockchainVerified: false,
   },
   {
@@ -67,7 +67,7 @@ export const DEMO_PROPERTIES = [
     landType: 'residential',
     status: 'verified',
     ipfsHash: 'QmSampleHashLR1',
-    transactionHash: '0xLRHash001',
+    transactionHash: '0x3333333333333333333333333333333333333333333333333333333333333333',
     blockchainVerified: true,
   },
   {
@@ -81,7 +81,7 @@ export const DEMO_PROPERTIES = [
     landType: 'agricultural',
     status: 'verified',
     ipfsHash: 'QmSampleHashLR2',
-    transactionHash: '0xLRHash002',
+    transactionHash: '0x4444444444444444444444444444444444444444444444444444444444444444',
     blockchainVerified: true,
   },
   {
@@ -95,7 +95,7 @@ export const DEMO_PROPERTIES = [
     landType: 'commercial',
     status: 'verified',
     ipfsHash: 'QmSampleHashLR3',
-    transactionHash: '0xLRHash003',
+    transactionHash: '0x5555555555555555555555555555555555555555555555555555555555555555',
     blockchainVerified: true,
   },
   {
@@ -109,7 +109,7 @@ export const DEMO_PROPERTIES = [
     landType: 'residential',
     status: 'pending',
     ipfsHash: 'QmSampleHashLR4',
-    transactionHash: '0xLRHash004',
+    transactionHash: '0x6666666666666666666666666666666666666666666666666666666666666666',
     blockchainVerified: false,
   },
 ];

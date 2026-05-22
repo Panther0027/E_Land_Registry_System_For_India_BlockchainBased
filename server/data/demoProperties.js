@@ -13,7 +13,7 @@ export const DEMO_PROPERTIES = [
     landType: 'residential',
     status: 'verified',
     ipfsHash: 'QmSampleHash001',
-    transactionHash: '0xabc123def456789',
+    transactionHash: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     blockchainVerified: true,
   },
   {
@@ -27,7 +27,7 @@ export const DEMO_PROPERTIES = [
     landType: 'agricultural',
     status: 'pending',
     ipfsHash: 'QmSampleHash002',
-    transactionHash: '0xdef456abc789012',
+    transactionHash: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     blockchainVerified: false,
   },
   {
@@ -41,7 +41,7 @@ export const DEMO_PROPERTIES = [
     landType: 'commercial',
     status: 'verified',
     ipfsHash: 'QmSampleHash003',
-    transactionHash: '0x789012abc345def',
+    transactionHash: '0x1111111111111111111111111111111111111111111111111111111111111111',
     blockchainVerified: true,
   },
   {
@@ -55,7 +55,7 @@ export const DEMO_PROPERTIES = [
     landType: 'agricultural',
     status: 'disputed',
     ipfsHash: 'QmSampleHash004',
-    transactionHash: '0xdispute004hash',
+    transactionHash: '0x2222222222222222222222222222222222222222222222222222222222222222',
     blockchainVerified: false,
     verificationRemarks: 'Boundary dispute with adjacent plot SN-2024-005',
   },
