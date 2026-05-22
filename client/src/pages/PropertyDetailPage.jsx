@@ -16,6 +16,7 @@ import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import { CardSkeleton } from '../components/ui/Skeleton';
 import { propertyAPI } from '../services';
+import { findDemoProperty } from '../data/demoProperties';
 import { formatDate, formatArea, truncateHash, copyToClipboard } from '../utils';
 import { SEPOLIA_EXPLORER } from '../constants';
 
@@ -31,7 +32,19 @@ const PropertyDetailPage = () => {
 
   const { data, isLoading } = useQuery({
     queryKey: ['property', id],
-    queryFn: () => propertyAPI.getById(id).then((r) => r.data.data),
+    queryFn: async () => {
+      try {
+        const res = await propertyAPI.getById(id);
+        return res.data.data;
+      } catch (error) {
+        const fallback = findDemoProperty({ propertyId: id });
+        if (fallback) {
+          return { property: { ...fallback, demo: true }, transactions: [], ownershipHistory: [] };
+        }
+        throw error;
+      }
+    },
+    retry: false,
   });
 
   const ownerName = data?.property?.owner?.fullName || data?.property?.ownerName || 'Unknown';

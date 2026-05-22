@@ -71,7 +71,7 @@ const HomePage = () => {
   const { t } = useTranslation();
   const [activeFeature, setActiveFeature] = useState(null);
 
-  const { data: stats } = useQuery({
+  const { data: stats = computeDemoStats(), isError } = useQuery({
     queryKey: ['public-stats'],
     queryFn: async () => {
       try {
@@ -82,6 +82,9 @@ const HomePage = () => {
       }
       return computeDemoStats();
     },
+    initialData: computeDemoStats(),
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 
   const statItems = [
