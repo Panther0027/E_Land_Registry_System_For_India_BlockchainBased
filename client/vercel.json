@@ -7,5 +7,8 @@
     }
   ],
   "buildCommand": "npm install && npm run build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://https://e-land-registry-system-for-india.onrender.com/api/$1" }
+  ]
 }

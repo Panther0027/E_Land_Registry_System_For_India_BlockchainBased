@@ -3,8 +3,6 @@ pipeline {
 
     environment {
         DOCKER_REGISTRY = 'docker.io'
-        DOCKER_USERNAME = credentials('DOCKERHUB_USERNAME')
-        DOCKER_PASSWORD = credentials('DOCKERHUB_TOKEN')
         GITHUB_REPO = 'E_Land_Registry_System_For_India_BlockchainBased'
         BUILD_TAG = "${BUILD_NUMBER}"
         LATEST_TAG = 'latest'
@@ -69,16 +67,21 @@ pipeline {
         stage('Login to Docker Registry') {
             steps {
                 echo '========== Logging in to Docker Hub =========='
-                script {
-                    try {
-                        sh '''
-                            echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin
-                            echo "Docker login successful"
-                        '''
-                    } catch (Exception e) {
-                        echo "Docker login failed: ${e}"
-                        currentBuild.result = 'FAILURE'
-                        error("Docker login failed")
+                withCredentials([
+                    string(credentialsId: 'DOCKERHUB_USERNAME', variable: 'DOCKER_USERNAME'),
+                    string(credentialsId: 'DOCKERHUB_TOKEN', variable: 'DOCKER_PASSWORD')
+                ]) {
+                    script {
+                        try {
+                            sh '''
+                                echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+                                echo "Docker login successful"
+                            '''
+                        } catch (Exception e) {
+                            echo "Docker login failed: ${e}"
+                            currentBuild.result = 'FAILURE'
+                            error("Docker login failed")
+                        }
                     }
                 }
             }
