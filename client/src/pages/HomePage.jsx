@@ -10,6 +10,7 @@ import {
 import PublicLayout from '../layouts/PublicLayout';
 import Button from '../components/ui/Button';
 import api from '../services/api';
+import { DEMO_PROPERTIES } from '../data/demoProperties';
 
 const FEATURE_DETAILS = [
   {
@@ -54,13 +55,33 @@ const FEATURE_DETAILS = [
   },
 ];
 
+const computeDemoStats = () => {
+  const totalProperties = DEMO_PROPERTIES.length;
+  const verifiedCount = DEMO_PROPERTIES.filter((property) => property.status === 'verified').length;
+  const statesCovered = new Set(DEMO_PROPERTIES.map((property) => property.state)).size;
+  const totalTransactions = DEMO_PROPERTIES.reduce(
+    (sum, property) => sum + (property.transactionHash ? 1 : 0),
+    0
+  );
+
+  return { totalProperties, verifiedCount, statesCovered, totalTransactions };
+};
+
 const HomePage = () => {
   const { t } = useTranslation();
   const [activeFeature, setActiveFeature] = useState(null);
 
   const { data: stats } = useQuery({
     queryKey: ['public-stats'],
-    queryFn: () => api.get('/property/stats/public').then((r) => r.data.data),
+    queryFn: async () => {
+      try {
+        const res = await api.get('/property/stats/public');
+        if (res.data?.data) return res.data.data;
+      } catch (error) {
+        console.warn('Public stats unavailable, using demo data:', error?.message || error);
+      }
+      return computeDemoStats();
+    },
   });
 
   const statItems = [

@@ -8,7 +8,7 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Badge from '../components/ui/Badge';
 import BlockchainVerifyPanel from '../components/BlockchainVerifyPanel';
-import { getDemoBlockchainVerification } from '../data/demoProperties';
+import { getDemoBlockchainVerification, findDemoProperty } from '../data/demoProperties';
 import { searchSchema } from '../utils/validation';
 import { propertyAPI } from '../services';
 import { formatDate, formatArea } from '../utils';
@@ -33,15 +33,25 @@ const SearchVerifyPage = () => {
       else params.surveyNumber = data.surveyNumber;
 
       const res = await propertyAPI.search(params);
-      if (res.data?.success) {
+      if (res.data?.success && res.data?.data) {
         setResult(res.data);
       } else {
-        toast.error(res.data?.message || 'Search failed');
-        setResult(null);
+        const demo = findDemoProperty({ propertyId: data.propertyId?.trim(), surveyNumber: data.surveyNumber?.trim() });
+        if (demo) {
+          setResult({ success: true, data: demo, verified: demo.status === 'verified', demo: true });
+        } else {
+          toast.error(res.data?.message || 'Search failed');
+          setResult(null);
+        }
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Search failed. Please try again.');
-      setResult(null);
+      const demo = findDemoProperty({ propertyId: data.propertyId?.trim(), surveyNumber: data.surveyNumber?.trim() });
+      if (demo) {
+        setResult({ success: true, data: demo, verified: demo.status === 'verified', demo: true });
+      } else {
+        toast.error(err.response?.data?.message || 'Search failed. Please try again.');
+        setResult(null);
+      }
     } finally {
       setLoading(false);
     }
