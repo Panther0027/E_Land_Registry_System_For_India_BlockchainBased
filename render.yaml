@@ -1,0 +1,26 @@
+services:
+  - type: web_service
+    name: bhumi-server
+    env: node
+    branch: main
+    plan: starter
+    autoDeploy: true
+    root: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: REGISTRY_PRIMARY_EMAIL
+        sync: false
+      - key: FIREBASE_ADMIN_SERVICE_ACCOUNT
+        sync: false
+      - key: FIREBASE_CLIENT_CONFIG
+        sync: false
+    healthCheckPath: "/api/health"

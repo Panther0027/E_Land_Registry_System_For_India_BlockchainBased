@@ -61,6 +61,10 @@ const start = async () => {
   // initialize socket.io
   initSocket(server);
 
+  app.get("/", (req, res) => {
+  res.send("Backend is running successfully");
+});
+
   server.listen(PORT, () => {
     console.log(`
   ╔══════════════════════════════════════╗
