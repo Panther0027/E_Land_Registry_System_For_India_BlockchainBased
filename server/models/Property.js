@@ -64,6 +64,10 @@ const propertySchema = new mongoose.Schema(
     },
     verifiedAt: { type: Date },
     blockchainVerified: { type: Boolean, default: false },
+    forSale: { type: Boolean, default: false },
+    listingPrice: { type: Number, default: null },
+    listingDescription: { type: String, default: '' },
+    listedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

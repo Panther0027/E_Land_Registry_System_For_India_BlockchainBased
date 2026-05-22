@@ -31,6 +31,14 @@ const BUILTIN_ACCOUNTS = [
     role: 'verifier',
     aadhaar: '456789012341',
   },
+  {
+    email: 'demo.buyer@example.com',
+    password: 'Demo@1234',
+    fullName: 'Demo Buyer',
+    phone: '9123456781',
+    role: 'owner',
+    aadhaar: '567890123456',
+  },
 ];
 
 const toPublicUser = (user) => ({
@@ -48,6 +56,15 @@ const toPublicUser = (user) => ({
 });
 
 export const getDemoUserById = (id) => demoUsers.get(id) || null;
+
+export const getDemoUserByEmail = (email) => {
+  if (!email) return null;
+  const normalizedEmail = email.toLowerCase().trim();
+  return [...demoUsers.values()].find((u) => u.email === normalizedEmail) || null;
+};
+
+export const getDemoUserByAadhaarHash = (aadhaarHash) =>
+  [...demoUsers.values()].find((u) => u.aadhaarHash === aadhaarHash) || null;
 
 export const registerDemoUser = async ({ fullName, email, phone, aadhaar, password, role }) => {
   const normalizedEmail = email.toLowerCase().trim();
@@ -103,7 +120,36 @@ export const loginDemoUser = async ({ email, password }) => {
 
 export const demoAuthActive = () => demoUsers.size > 0;
 
+/** Create your account from REGISTRY_PRIMARY_* in .env when MongoDB is down */
+export const initPrimaryAccountFromEnv = async () => {
+  const email = process.env.REGISTRY_PRIMARY_EMAIL?.trim().toLowerCase();
+  if (!email) return;
+
+  const existing = [...demoUsers.values()].find((u) => u.email === email);
+  if (existing) {
+    console.log(`Primary account ready (offline): ${email}`);
+    return;
+  }
+
+  const aadhaar = (process.env.REGISTRY_PRIMARY_AADHAAR || '871611719086').replace(/\D/g, '');
+  const result = await registerDemoUser({
+    fullName: (process.env.REGISTRY_PRIMARY_FULL_NAME || 'Primary Owner').trim(),
+    email,
+    phone: process.env.REGISTRY_PRIMARY_PHONE || '9876543210',
+    aadhaar,
+    password: process.env.REGISTRY_PRIMARY_PASSWORD || 'Owner@123',
+    role: 'owner',
+  });
+
+  if (result.error) {
+    console.warn('Primary offline account:', result.error);
+  } else {
+    console.log(`✓ Primary account ready (offline): ${email}`);
+  }
+};
+
 export const initBuiltinDemoAccounts = async () => {
+  await initPrimaryAccountFromEnv();
   for (const acc of BUILTIN_ACCOUNTS) {
     const existing = [...demoUsers.values()].find((u) => u.email === acc.email);
     if (existing) continue;

@@ -4,11 +4,10 @@
 
 | Requirement | Version / notes |
 |-------------|-----------------|
-| **Docker Desktop** | 4.x+ (Windows/Mac) or Docker Engine on Linux |
 | **RAM** | 4 GB minimum (8 GB recommended for MongoDB + import) |
 | **Disk** | ~2 GB free |
-| **Ports** | `80` (web), `5000` (API optional), `27017` (MongoDB internal) |
-| **MongoDB** | Included in Docker Compose |
+| **Ports** | `5000` (API), `5173` (frontend) |
+| **MongoDB** | Running locally on `mongodb://127.0.0.1:27017/bhumi` |
 | **Git** | To clone the repository |
 
 Optional for full blockchain/IPFS:
@@ -41,19 +40,17 @@ JWT_SECRET=your-long-random-secret
 
 ---
 
-## Step 2 — Run Docker
+## Step 2 — Run locally
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+cd server
+npm install
+npm run import:dataset
 ```
 
-First start imports **10,000 properties** from `data/land_registry_dataset_10000.xlsx` (5–15 minutes).
+This imports **10,000 properties** from `data/land_registry_dataset_10000.xlsx` (5–15 minutes).
 
-Watch logs:
-
-```bash
-docker compose -f docker-compose.prod.yml logs -f server
-```
+Watch the server output for completion.
 
 ---
 
@@ -92,24 +89,13 @@ Credentials written to `IMPORTED_CREDENTIALS.txt`.
 
 ---
 
-## Docker Hub images
-
-- https://hub.docker.com/r/panther0027/bhumi-land-registry-api
-- https://hub.docker.com/r/panther0027/bhumi-land-registry-web
-
-```bash
-docker login
-docker compose -f docker-compose.prod.yml build
-docker tag bhumi-server panther0027/bhumi-land-registry-api:latest
-docker tag bhumi-client panther0027/bhumi-land-registry-web:latest
-docker push panther0027/bhumi-land-registry-api:latest
-docker push panther0027/bhumi-land-registry-web:latest
-```
-
----
 
 ## Troubleshooting
 
-- **Login fails** — MongoDB must be running; `ENABLE_DEMO_MODE=false`. Re-run import: `docker compose exec server node scripts/importLandRegistryDataset.js`
-- **Empty properties** — wait for import to finish; check `docker logs bhumi-api`
+- **Login fails** — MongoDB must be running; `ENABLE_DEMO_MODE=false`. Re-run import:
+  ```bash
+  cd server
+  npm run import:dataset
+  ```
+- **Empty properties** — wait for import to finish; check server logs in the terminal where import is running.
 - **Atlas instead of local Mongo** — set `MONGODB_URI` to Atlas connection string; whitelist your IP `0.0.0.0/0`

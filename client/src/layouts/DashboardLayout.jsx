@@ -1,5 +1,6 @@
 import { NavLink, useNavigate, Outlet } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   HiOutlineHome, HiOutlineDocumentAdd, HiOutlineSwitchHorizontal,
   HiOutlineSearch, HiOutlineDocumentText, HiOutlineBell, HiOutlineUser,
@@ -8,6 +9,7 @@ import {
 } from 'react-icons/hi';
 import Logo from '../components/Logo';
 import { useAuthStore, useUIStore } from '../store';
+import { notificationAPI } from '../services';
 import { ROLE_LABELS } from '../constants';
 
 const navItems = [
@@ -29,6 +31,16 @@ const Sidebar = () => {
   const { user, logout, hasRole } = useAuthStore();
   const { sidebarOpen, mobileMenuOpen, setMobileMenuOpen } = useUIStore();
   const navigate = useNavigate();
+
+  const { data: unreadNotifications } = useQuery({
+    queryKey: ['notifications', 'unreadCount'],
+    queryFn: () => notificationAPI.getAll({ filter: 'unread' }).then((res) => res.data.data || []),
+    staleTime: 1000 * 60,
+    refetchInterval: 1000 * 30,
+    enabled: Boolean(user?._id),
+  });
+
+  const unreadCount = Array.isArray(unreadNotifications) ? unreadNotifications.length : 0;
 
   const items = hasRole('government_official', 'verifier')
     ? [...navItems.slice(0, 1), officialNav, ...navItems.slice(1)]
@@ -57,23 +69,33 @@ const Sidebar = () => {
       </div>
 
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {items.map(({ path, label, icon: Icon }) => (
-          <NavLink
-            key={path}
-            to={path}
-            onClick={() => setMobileMenuOpen(false)}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-secondary text-primary'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
-              }`
-            }
-          >
-            <Icon size={20} />
-            {sidebarOpen && label}
-          </NavLink>
-        ))}
+        {items.map(({ path, label, icon: Icon }) => {
+          const isNotifications = path === '/notifications';
+          return (
+            <NavLink
+              key={path}
+              to={path}
+              onClick={() => setMobileMenuOpen(false)}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                  isActive
+                    ? 'bg-secondary text-primary'
+                    : 'text-white/70 hover:bg-white/10 hover:text-white'
+                }`
+              }
+            >
+              <div className="relative">
+                <Icon size={20} />
+                {isNotifications && unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-error px-1.5 text-[10px] font-semibold text-white">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </div>
+              {sidebarOpen && label}
+            </NavLink>
+          );
+        })}
       </nav>
 
       <div className="p-4 border-t border-white/10">

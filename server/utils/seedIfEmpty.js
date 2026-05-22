@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const run = async () => {
-  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://mongodb:27017/bhumi');
+  await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bhumi');
   const count = await User.countDocuments();
   await mongoose.disconnect();
 

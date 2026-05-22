@@ -1,0 +1,8 @@
+{
+  "terminal.integrated.env.windows": {
+    "NVM_HOME": "C:\\Users\\ADMIN\\AppData\\Local\\nvm",
+    "NVM_SYMLINK": "C:\\nvm4w\\nodejs",
+    "Path": "C:\\Users\\ADMIN\\AppData\\Local\\nvm\\v22.22.0;C:\\Users\\ADMIN\\AppData\\Local\\nvm;${env:Path}"
+  },
+  "terminal.integrated.defaultProfile.windows": "PowerShell"
+}

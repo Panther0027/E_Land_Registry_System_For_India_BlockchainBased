@@ -30,7 +30,6 @@ bhumi/
 ├── client/          # React + Vite + Tailwind + i18n
 ├── server/          # Node.js + Express + MongoDB
 ├── contracts/       # Solidity + Hardhat (Sepolia)
-└── docker-compose.yml
 ```
 
 ---
@@ -58,32 +57,23 @@ cd ../client && npm run dev
 
 Open **http://localhost:5173**
 
-### Option B: Docker (development)
+### Option B: Local setup
 
 ```bash
 cd bhumi
 cp .env.example .env
-docker compose up -d
+npm run install:all
+cd server && npm run seed
+```
+
+Then start the backend and frontend locally:
+
+```bash
+npm run dev:server
+npm run dev:client
 ```
 
 Open **http://localhost:5173**
-
-### Option C: Docker Production
-
-```bash
-cd bhumi
-cp .env.production.example .env
-# Edit .env — set JWT_SECRET and optional blockchain/IPFS keys
-docker compose -f docker-compose.prod.yml up -d
-```
-
-Open **http://localhost** (port 80)
-
-**Docker Hub images:**
-- [panther0027/bhumi-land-registry-api](https://hub.docker.com/r/panther0027/bhumi-land-registry-api)
-- [panther0027/bhumi-land-registry-web](https://hub.docker.com/r/panther0027/bhumi-land-registry-web)
-
-See **[PRODUCTION_SETUP.md](./PRODUCTION_SETUP.md)** for Docker + **your real login** with 10,000 imported properties.
 
 See **[DEMO_GUIDE.md](./DEMO_GUIDE.md)** for presentation walkthrough.
 
@@ -91,7 +81,7 @@ See **[DEMO_GUIDE.md](./DEMO_GUIDE.md)** for presentation walkthrough.
 
 The file `data/land_registry_dataset_10000.xlsx` is imported into MongoDB with property IDs like **`LR-7D185238`**.
 
-Set in `.env` before import/Docker:
+Set in `.env` before import:
 
 ```env
 REGISTRY_PRIMARY_EMAIL=your@gmail.com

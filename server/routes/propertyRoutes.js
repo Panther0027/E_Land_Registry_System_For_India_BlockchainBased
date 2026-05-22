@@ -5,6 +5,7 @@ import {
   getPropertiesByOwner,
   getPropertiesByAadhaar,
   searchProperty,
+  requestTransferOtp,
   transferOwnership,
   verifyProperty,
   rejectProperty,
@@ -19,7 +20,19 @@ import {
   uploadDocument,
   getAllDocuments,
   verifyOnBlockchain,
+  listPropertyForSale,
+  getPropertiesForSale,
+  removePropertyFromSale,
 } from '../controllers/propertyController.js';
+import {
+  getAvailableProperties,
+  createPurchaseRequest,
+  getRequestsForOwner,
+  approveRequest,
+  rejectRequest,
+  sendMessage,
+  getMessages,
+} from '../controllers/purchaseController.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { uploadFields, upload } from '../middleware/upload.js';
 
@@ -44,11 +57,24 @@ router.get('/documents/demo-samples', protect, (req, res) => {
 });
 router.get('/pending/all', protect, authorize(...officialRoles), getPendingProperties);
 router.get('/disputed/all', protect, authorize(...officialRoles), getDisputedProperties);
+// Purchase request & chat endpoints (place before generic '/:id' to avoid collisions)
+router.get('/available', protect, getAvailableProperties);
+router.get('/marketplace/browse', getPropertiesForSale);
+router.post('/marketplace/list', protect, listPropertyForSale);
+router.post('/marketplace/unlist', protect, removePropertyFromSale);
+router.post('/request', protect, createPurchaseRequest);
+router.get('/requests/owner', protect, getRequestsForOwner);
+router.post('/requests/:id/approve', protect, approveRequest);
+router.post('/requests/:id/reject', protect, rejectRequest);
+router.post('/requests/:id/messages', protect, sendMessage);
+router.get('/requests/:id/messages', protect, getMessages);
+
 router.get('/:id/certificate', protect, generateCertificate);
 router.get('/:id/blockchain', verifyOnBlockchain);
 router.get('/:id', getProperty);
 
 router.post('/register', protect, uploadFields, registerProperty);
+router.post('/transfer/otp', protect, requestTransferOtp);
 router.post('/transfer', protect, transferOwnership);
 router.post('/verify/:id', protect, authorize(...officialRoles), verifyProperty);
 router.post('/reject/:id', protect, authorize('government_official'), rejectProperty);

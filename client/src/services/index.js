@@ -32,6 +32,10 @@ export const propertyAPI = {
   verifyBlockchain: (id) => api.get(`/property/${id}/blockchain`),
   downloadCertificate: (id) =>
     api.get(`/property/${id}/certificate`, { responseType: 'blob' }),
+  sendTransferOtp: (data) => api.post('/property/transfer/otp', data),
+  getPropertiesForSale: (params) => api.get('/property/marketplace/browse', { params }),
+  listPropertyForSale: (data) => api.post('/property/marketplace/list', data),
+  removePropertyFromSale: (data) => api.post('/property/marketplace/unlist', data),
 };
 
 export const transactionAPI = {

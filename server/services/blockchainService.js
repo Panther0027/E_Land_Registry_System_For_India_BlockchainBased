@@ -5,6 +5,15 @@ import Property from '../models/Property.js';
 
 const STATUS_MAP = ['pending', 'verified', 'disputed', 'transferred'];
 
+const normalizeReceipt = (receipt) => {
+  const txHash = receipt?.transactionHash || receipt?.hash || '';
+  return {
+    txHash,
+    blockNumber: receipt?.blockNumber,
+    gasUsed: receipt?.gasUsed?.toString(),
+  };
+};
+
 export const registerPropertyOnChain = async (propertyId, ownerAadhaarHash, location, area, ipfsHash) => {
   const contract = getContract();
   if (!contract) {
@@ -19,7 +28,7 @@ export const registerPropertyOnChain = async (propertyId, ownerAadhaarHash, loca
     ipfsHash
   );
   const receipt = await tx.wait();
-  return { txHash: receipt.hash, blockNumber: receipt.blockNumber, gasUsed: receipt.gasUsed?.toString() };
+  return normalizeReceipt(receipt);
 };
 
 export const verifyPropertyOnChain = async (propertyId) => {
@@ -30,7 +39,7 @@ export const verifyPropertyOnChain = async (propertyId) => {
 
   const tx = await contract.verifyProperty(propertyId);
   const receipt = await tx.wait();
-  return { txHash: receipt.hash, blockNumber: receipt.blockNumber };
+  return normalizeReceipt(receipt);
 };
 
 export const transferOwnershipOnChain = async (propertyId, newOwnerAadhaarHash) => {
@@ -39,9 +48,27 @@ export const transferOwnershipOnChain = async (propertyId, newOwnerAadhaarHash) 
     return { txHash: `0xmocktransfer${Date.now().toString(16)}`, mock: true };
   }
 
-  const tx = await contract.transferOwnership(propertyId, newOwnerAadhaarHash);
-  const receipt = await tx.wait();
-  return { txHash: receipt.hash, blockNumber: receipt.blockNumber };
+  try {
+    const tx = await contract.transferOwnership(propertyId, newOwnerAadhaarHash);
+    const receipt = await tx.wait();
+    const result = normalizeReceipt(receipt);
+    console.log('transferOwnership tx:', result.txHash, 'block', result.blockNumber);
+    return result;
+  } catch (err) {
+    // If estimateGas failed or RPC connection reset, retry with a conservative gasLimit
+    const isGasErr = err?.code === 'UNPREDICTABLE_GAS_LIMIT' || (err && err.message && err.message.includes('estimateGas'));
+    if (isGasErr) {
+      const fallbackLimit = 700000;
+      console.warn('estimateGas failed, retrying transfer with gasLimit', fallbackLimit, err.message);
+      const tx = await contract.transferOwnership(propertyId, newOwnerAadhaarHash, { gasLimit: fallbackLimit });
+      const receipt = await tx.wait();
+      const result = normalizeReceipt(receipt);
+      console.log('transferOwnership (fallback) tx:', result.txHash, 'block', result.blockNumber);
+      return result;
+    }
+    // rethrow for other errors
+    throw err;
+  }
 };
 
 export const getPropertyFromChain = async (propertyId) => {
@@ -93,18 +120,25 @@ export const raiseDisputeOnChain = async (propertyId, reason) => {
 };
 
 export const createTransactionRecord = async (data) => {
-  return Transaction.create(data);
+  try {
+    return await Transaction.create(data);
+  } catch (err) {
+    console.error('Error creating transaction record:', err.message, 'payload:', data, err.stack);
+    // Do not crash the server for non-critical logging failures; return null
+    return null;
+  }
 };
 
 export const handleBlockchainEvent = async (eventName, data) => {
-  console.log(`Blockchain event: ${eventName}`, data?.args?.[0] || '');
+  const raw = data?.args?.[0];
+  const arg0 = raw == null ? '' : String(raw);
+  console.log(`Blockchain event: ${eventName}`, arg0);
 
   if (eventName === 'PropertyVerified') {
-    const propertyId = data.args[0];
-    await Property.findOneAndUpdate(
-      { propertyId },
-      { blockchainVerified: true }
-    );
+    const propertyId = arg0;
+    if (propertyId) {
+      await Property.findOneAndUpdate({ propertyId }, { blockchainVerified: true });
+    }
   }
 };
 

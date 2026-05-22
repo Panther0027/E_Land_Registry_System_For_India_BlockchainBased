@@ -1,3 +1,5 @@
+import { findDemoPropertyById, findDemoPropertyBySurveyNumber } from './demoPropertyStore.js';
+
 /** Demo land records for presentations when MongoDB is empty or unavailable */
 export const DEMO_PROPERTIES = [
   {
@@ -68,11 +70,15 @@ export const DEMO_PUBLIC_STATS = {
 
 export const findDemoProperty = ({ propertyId, surveyNumber }) => {
   if (propertyId) {
+    const stored = findDemoPropertyById(propertyId);
+    if (stored) return stored;
     return DEMO_PROPERTIES.find(
       (p) => p.propertyId.toLowerCase() === propertyId.trim().toLowerCase()
     );
   }
   if (surveyNumber) {
+    const stored = findDemoPropertyBySurveyNumber(surveyNumber);
+    if (stored) return stored;
     return DEMO_PROPERTIES.find(
       (p) => p.surveyNumber.toLowerCase() === surveyNumber.trim().toLowerCase()
     );

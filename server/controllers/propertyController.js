@@ -2,7 +2,8 @@ import Property from '../models/Property.js';
 import User from '../models/User.js';
 import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
-import { hashAadhaar } from '../utils/crypto.js';
+import { generateOTP, hashAadhaar, validateAadhaar } from '../utils/crypto.js';
+import { getIO } from '../config/socket.js';
 import { resolvePropertyId } from '../utils/propertyId.js';
 import { uploadToIPFS, uploadJSONToIPFS, getIPFSUrl } from '../config/pinata.js';
 import {
@@ -25,10 +26,18 @@ import {
 import {
   addDemoProperty,
   getDemoPropertiesForUser,
+  findDemoPropertyForOwner,
+  markDemoPropertyPendingTransfer,
+  removeDemoPropertyForUser,
+  verifyDemoProperty,
 } from '../data/demoPropertyStore.js';
+import { addDemoTransaction, getDemoTransactionsForProperty, getRecentDemoTransactions } from '../data/demoTransactions.js';
+import { getDemoUserByAadhaarHash } from '../services/demoAuthStore.js';
 import { getContract } from '../config/blockchain.js';
 import { isDbConnected } from '../config/db.js';
 import { isDemoModeEnabled, isOfflineMode } from '../config/appConfig.js';
+import { buildTransferOtpKey, getTransferOtp, removeTransferOtp, setTransferOtp } from '../data/otpStore.js';
+import { maskEmail, maskPhone, sendTransferOtp } from '../services/otpService.js';
 import fs from 'fs';
 
 const registerOnChainWithRetry = async (resolveId, ownerAadhaarHash, location, area, ipfsHash) => {
@@ -176,6 +185,31 @@ export const registerProperty = async (req, res, next) => {
         blockchainVerified: !chainResult.mock,
       });
 
+      setTimeout(() => {
+        const verified = verifyDemoProperty(userId, property.propertyId);
+        if (verified) {
+          console.log(`Demo property ${property.propertyId} auto-verified after 20 seconds`);
+          addDemoTransaction({
+            propertyId: property.propertyId,
+            actionType: 'VERIFY',
+            txHash: property.transactionHash,
+            initiatedBy: userId,
+            status: 'confirmed',
+            createdAt: new Date(),
+          });
+        }
+      }, 20000);
+
+      // Create a demo transaction record for registration so dashboard shows activity
+      addDemoTransaction({
+        propertyId: property.propertyId,
+        actionType: 'REGISTER',
+        txHash: property.transactionHash,
+        initiatedBy: userId,
+        status: 'confirmed',
+        createdAt: new Date(),
+      });
+
       return res.status(201).json({
         success: true,
         message: isOfflineMode()
@@ -249,11 +283,31 @@ export const registerProperty = async (req, res, next) => {
 
 export const getProperty = async (req, res, next) => {
   try {
-    const property = await Property.findOne({ propertyId: req.params.id })
-      .populate('owner', 'fullName email walletAddress')
-      .populate('verifiedBy', 'fullName');
+    let property = null;
+    if (isDbConnected()) {
+      property = await Property.findOne({ propertyId: req.params.id })
+        .populate('owner', 'fullName email walletAddress')
+        .populate('verifiedBy', 'fullName');
+    }
 
     if (!property) {
+      if (isDemoModeEnabled() || !isDbConnected()) {
+        const demoProperty = findDemoProperty({ propertyId: req.params.id });
+        if (demoProperty) {
+          const chainData = getDemoBlockchainVerification(demoProperty.propertyId);
+          const transactions = getDemoTransactionsForProperty(demoProperty.propertyId);
+          return res.json({
+            success: true,
+            data: {
+              property: demoProperty,
+              transactions,
+              ownershipHistory: chainData?.history || [],
+              ipfsUrl: demoProperty.ipfsHash ? getIPFSUrl(demoProperty.ipfsHash) : null,
+            },
+            demo: true,
+          });
+        }
+      }
       return res.status(404).json({ success: false, message: 'Property not found' });
     }
 
@@ -353,7 +407,7 @@ export const searchProperty = async (req, res, next) => {
 
     if (isDbConnected()) {
       try {
-        property = await Property.findOne(query).populate('owner', 'fullName');
+        property = await Property.findOne(query).populate('owner', 'fullName email');
       } catch (dbErr) {
         console.warn('Property search DB error, trying demo data:', dbErr.message);
       }
@@ -364,14 +418,17 @@ export const searchProperty = async (req, res, next) => {
       if (demoProperty) {
         property = demoProperty;
         demo = true;
-      } else {
-        return res.json({
-          success: true,
-          data: null,
-          verified: false,
-          message: 'Property not found',
-        });
       }
+    }
+
+    if (!property) {
+      return res.json({
+        success: true,
+        data: null,
+        verified: false,
+        message: 'Property not found',
+        demo: !isDbConnected() || isDemoModeEnabled(),
+      });
     }
 
     let chainData = null;
@@ -393,10 +450,233 @@ export const searchProperty = async (req, res, next) => {
   }
 };
 
+const validateTransferOtpRequest = ({ propertyId, newOwnerAadhaar, channel }) => {
+  if (!propertyId || !String(propertyId).trim()) {
+    const error = new Error('Property ID is required for OTP request');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const aadhaar = String(newOwnerAadhaar || '').replace(/\D/g, '');
+  if (!validateAadhaar(aadhaar)) {
+    const error = new Error('Enter a valid 12-digit Aadhaar for recipient lookup');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (channel && !['email', 'sms'].includes(channel)) {
+    const error = new Error('OTP channel must be email or sms');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return aadhaar;
+};
+
+export const requestTransferOtp = async (req, res, next) => {
+  try {
+    const { propertyId, newOwnerAadhaar, channel } = req.body;
+    const aadhaar = validateTransferOtpRequest({ propertyId, newOwnerAadhaar, channel });
+    const newOwnerHash = hashAadhaar(aadhaar);
+
+    const userId = req.user._id ?? req.user.id;
+    const isDemoTransfer = isDemoUser(req.user) || !isDbConnected();
+
+    let property;
+    if (isDemoTransfer) {
+      property = findDemoPropertyForOwner(userId, propertyId);
+    } else {
+      property = await Property.findOne({ propertyId, owner: req.user._id });
+    }
+
+    if (!property) {
+      return res.status(404).json({ success: false, message: 'Property not found or not owned by you' });
+    }
+
+    if (property.status !== 'verified') {
+      return res.status(400).json({ success: false, message: 'Only verified properties can be transferred' });
+    }
+
+    let newOwner;
+    if (isDemoTransfer) {
+      newOwner = getDemoUserByAadhaarHash(newOwnerHash);
+    } else {
+      newOwner = await User.findOne({ aadhaarHash: newOwnerHash }).select('fullName email phone walletAddress');
+    }
+
+    if (!newOwner) {
+      return res.status(404).json({ success: false, message: 'New owner not found. They must register on Bhumi first.' });
+    }
+
+    const preferredChannel = channel || (newOwner.email ? 'email' : 'sms');
+    if (preferredChannel === 'email' && !newOwner.email) {
+      return res.status(400).json({ success: false, message: 'Recipient has no email address on file' });
+    }
+    if (preferredChannel === 'sms' && !newOwner.phone) {
+      return res.status(400).json({ success: false, message: 'Recipient has no phone number on file' });
+    }
+
+    const otp = generateOTP();
+    const key = buildTransferOtpKey(userId, propertyId, aadhaar);
+    setTransferOtp(key, {
+      otp,
+      expiresAt: Date.now() + 1000 * 60 * 10,
+      channel: preferredChannel,
+      propertyId,
+      newOwnerAadhaar: aadhaar,
+    });
+
+    const contactValue = preferredChannel === 'email' ? newOwner.email : newOwner.phone;
+    await sendTransferOtp({ channel: preferredChannel, to: contactValue, otp });
+
+    res.json({
+      success: true,
+      message: `OTP sent to ${preferredChannel === 'email' ? maskEmail(newOwner.email) : maskPhone(newOwner.phone)}. Use it to confirm the transfer.`,
+      data: { contactMethod: preferredChannel },
+    });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    next(error);
+  }
+};
+
 export const transferOwnership = async (req, res, next) => {
   try {
-    const { propertyId, newOwnerAadhaar, transferReason } = req.body;
-    const newOwnerHash = hashAadhaar(newOwnerAadhaar);
+    const { propertyId, newOwnerAadhaar, transferReason, otp } = req.body;
+    const cleanAadhaar = String(newOwnerAadhaar || '').replace(/\D/g, '');
+    if (!validateAadhaar(cleanAadhaar)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid 12-digit Aadhaar for the recipient' });
+    }
+
+    const newOwnerHash = hashAadhaar(cleanAadhaar);
+    const userId = req.user._id ?? req.user.id;
+    const otpKey = buildTransferOtpKey(userId, propertyId, cleanAadhaar);
+    const otpEntry = getTransferOtp(otpKey);
+
+    if (!otpEntry) {
+      return res.status(400).json({ success: false, message: 'Please request an OTP before confirming transfer' });
+    }
+
+    if (otpEntry.expiresAt <= Date.now()) {
+      removeTransferOtp(otpKey);
+      return res.status(400).json({ success: false, message: 'OTP expired. Request a new one.' });
+    }
+
+    if (!otp || String(otp).trim() !== otpEntry.otp) {
+      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+
+    removeTransferOtp(otpKey);
+
+    const isDemoTransfer = isDemoUser(req.user) || !isDbConnected();
+
+    if (isDemoTransfer) {
+      const userId = req.user._id ?? req.user.id;
+      const property = findDemoPropertyForOwner(userId, propertyId);
+
+      if (!property) {
+        return res.status(404).json({ success: false, message: 'Property not found or not owned by you' });
+      }
+
+      if (property.status !== 'verified') {
+        return res.status(400).json({
+          success: false,
+          message: 'Only verified properties can be transferred',
+        });
+      }
+
+      const newOwner = getDemoUserByAadhaarHash(newOwnerHash);
+      if (!newOwner) {
+        return res.status(404).json({
+          success: false,
+          message: 'New owner not found. They must register on Bhumi first.',
+        });
+      }
+
+      const pendingProperty = markDemoPropertyPendingTransfer(userId, propertyId, newOwner.id ?? newOwner._id, newOwner.fullName);
+      if (!pendingProperty) {
+        return res.status(400).json({
+          success: false,
+          message: 'Unable to schedule transfer. Property must be verified and owned by you.',
+        });
+      }
+
+      addDemoTransaction({
+        propertyId,
+        actionType: 'TRANSFER_REQUEST',
+        txHash: pendingProperty.transactionHash,
+        initiatedBy: userId,
+        status: 'pending',
+        details: { previousOwner: req.user.fullName, newOwner: newOwner.fullName },
+        createdAt: new Date(),
+      });
+
+      await createNotification(
+        newOwner.id ?? newOwner._id,
+        'transfer_request',
+        'Incoming Ownership Transfer',
+        `${req.user.fullName} has initiated a transfer for property ${propertyId}.`,
+        propertyId
+      );
+
+      await createNotification(
+        userId,
+        'transfer_request',
+        'Transfer Initiated',
+        `You requested transfer of property ${propertyId} to ${newOwner.fullName}.`,
+        propertyId
+      );
+
+      const io = getIO();
+
+      setTimeout(async () => {
+        const ownerProperty = findDemoPropertyForOwner(userId, propertyId);
+        if (!ownerProperty || ownerProperty.status !== 'pending_transfer') {
+          return;
+        }
+
+        const removed = removeDemoPropertyForUser(userId, propertyId);
+        if (!removed) {
+          return;
+        }
+
+        const transferredProperty = addDemoProperty(newOwner.id ?? newOwner._id, {
+          ...removed,
+          ownerName: newOwner.fullName,
+          ownerAadhaarHash: newOwnerHash,
+          owner: newOwner.id ?? newOwner._id,
+          status: 'transferred',
+          transactionHash: `0xlocal${Date.now().toString(16)}`,
+        });
+
+        addDemoTransaction({
+          propertyId,
+          actionType: 'TRANSFER',
+          txHash: transferredProperty.transactionHash,
+          initiatedBy: newOwner.id ?? newOwner._id,
+          status: 'confirmed',
+          details: { previousOwner: req.user.fullName, newOwner: newOwner.fullName },
+          createdAt: new Date(),
+        });
+
+        if (io) {
+          io.to(`user:${newOwner.id ?? newOwner._id}`).emit('property_transferred', { propertyId, newOwner: newOwner.fullName });
+          io.to(`user:${userId}`).emit('property_transfer_confirmed', { propertyId });
+        }
+      }, 5000);
+
+      return res.json({
+        success: true,
+        message: 'Ownership transfer initiated. It will complete in a few seconds.',
+        data: {
+          property: pendingProperty,
+          newOwner: { fullName: newOwner.fullName, walletAddress: newOwner.walletAddress },
+        },
+        demo: true,
+      });
+    }
 
     const property = await Property.findOne({ propertyId, owner: req.user._id });
     if (!property) {
@@ -439,11 +719,25 @@ export const transferOwnership = async (req, res, next) => {
 
     await createNotification(
       newOwner._id,
-      'transfer_request',
+      'transfer_completed',
       'Ownership Transferred',
       `You are now the owner of property ${propertyId}.`,
       propertyId
     );
+
+    await createNotification(
+      req.user._id,
+      'transfer_completed',
+      'Transfer Completed',
+      `You transferred ${propertyId} to ${newOwner.fullName}.`,
+      propertyId
+    );
+
+    const io = getIO();
+    if (io) {
+      io.to(`user:${newOwner._id}`).emit('property_transferred', { propertyId, newOwner: newOwner.fullName });
+      io.to(`user:${req.user._id}`).emit('property_transfer_confirmed', { propertyId });
+    }
 
     res.json({
       success: true,
@@ -747,8 +1041,10 @@ export const getDashboardStats = async (req, res, next) => {
       const ownerPayload = {
         role: 'owner',
         totalProperties: props.length,
-        pendingTransfers: props.filter((p) => p.status === 'transferred').length,
-        verifiedDocuments: props.filter((p) => p.status === 'verified').length,
+        pendingCount: props.filter((p) => p.status === 'pending').length,
+        verifiedCount: props.filter((p) => p.status === 'verified').length,
+        disputedCount: props.filter((p) => p.status === 'disputed').length,
+        transferredCount: props.filter((p) => p.status === 'transferred').length,
         recentActivity: [],
         demo: true,
       };
@@ -760,11 +1056,13 @@ export const getDashboardStats = async (req, res, next) => {
             pendingCount: DEMO_PUBLIC_STATS.totalProperties,
             verifiedCount: DEMO_PUBLIC_STATS.verifiedCount,
             disputedCount: 0,
+            transferredCount: 0,
             recentActivity: [],
             demo: true,
           },
         });
       }
+      ownerPayload.recentActivity = getRecentDemoTransactions(10);
       return res.json({ success: true, data: ownerPayload });
     }
 
@@ -788,10 +1086,12 @@ export const getDashboardStats = async (req, res, next) => {
       });
     }
 
-    const [totalProperties, pendingTransfers, verifiedDocs, recentTransactions] = await Promise.all([
+    const [totalProperties, pendingCount, verifiedCount, disputedCount, transferredCount, recentTransactions] = await Promise.all([
       Property.countDocuments({ owner: userId }),
-      Property.countDocuments({ owner: userId, status: 'transferred' }),
+      Property.countDocuments({ owner: userId, status: 'pending' }),
       Property.countDocuments({ owner: userId, status: 'verified' }),
+      Property.countDocuments({ owner: userId, status: 'disputed' }),
+      Property.countDocuments({ owner: userId, status: 'transferred' }),
       Transaction.find({ initiatedBy: userId }).sort({ createdAt: -1 }).limit(10),
     ]);
 
@@ -800,8 +1100,10 @@ export const getDashboardStats = async (req, res, next) => {
       data: {
         role: 'owner',
         totalProperties,
-        pendingTransfers,
-        verifiedDocuments: verifiedDocs,
+        pendingCount,
+        verifiedCount,
+        disputedCount,
+        transferredCount,
         recentActivity: recentTransactions,
       },
     });
@@ -917,7 +1219,7 @@ export const verifyOnBlockchain = async (req, res, next) => {
     }
 
     const contract = getContract();
-    const contractAddress = contract?.target ?? process.env.CONTRACT_ADDRESS ?? null;
+    const contractAddress = contract?.address ?? process.env.CONTRACT_ADDRESS ?? null;
 
     let chainData = null;
     let history = [];
@@ -957,6 +1259,201 @@ export const verifyOnBlockchain = async (req, res, next) => {
       success: true,
       verified: false,
       message: 'Property not found on blockchain',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listPropertyForSale = async (req, res, next) => {
+  try {
+    const { propertyId, listingPrice, listingDescription } = req.body;
+    const userId = req.user._id ?? req.user.id;
+
+    if (!propertyId || !listingPrice) {
+      return res.status(400).json({ success: false, message: 'Property ID and listing price are required' });
+    }
+
+    if (typeof listingPrice !== 'number' || listingPrice <= 0) {
+      return res.status(400).json({ success: false, message: 'Listing price must be a positive number' });
+    }
+
+    const isDemoList = isDemoUser(req.user) || !isDbConnected();
+
+    if (isDemoList) {
+      const property = findDemoPropertyForOwner(userId, propertyId);
+      if (!property) {
+        return res.status(404).json({ success: false, message: 'Property not found or not owned by you' });
+      }
+      if (property.status !== 'verified') {
+        return res.status(400).json({ success: false, message: 'Only verified properties can be listed for sale' });
+      }
+
+      property.forSale = true;
+      property.listingPrice = listingPrice;
+      property.listingDescription = listingDescription || '';
+      property.listedAt = new Date();
+
+      return res.json({
+        success: true,
+        message: 'Property listed for sale',
+        data: property,
+        demo: true,
+      });
+    }
+
+    const property = await Property.findOne({ propertyId, owner: userId });
+    if (!property) {
+      return res.status(404).json({ success: false, message: 'Property not found or not owned by you' });
+    }
+
+    if (property.status !== 'verified') {
+      return res.status(400).json({ success: false, message: 'Only verified properties can be listed for sale' });
+    }
+
+    property.forSale = true;
+    property.listingPrice = listingPrice;
+    property.listingDescription = listingDescription || '';
+    property.listedAt = new Date();
+    await property.save();
+
+    res.json({
+      success: true,
+      message: 'Property listed for sale',
+      data: property,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPropertiesForSale = async (req, res, next) => {
+  try {
+    const userId = req.user?._id ?? req.user?.id;
+    const page = parseInt(req.query.page || '1', 10);
+    const limit = Math.min(parseInt(req.query.limit || '12', 10), 100);
+    const skip = (page - 1) * limit;
+
+    let properties = [];
+
+    if (isDemoUser(req.user) || !isDbConnected()) {
+      const all = getDemoPropertiesForUser(null) || [];
+      properties = all.filter((p) => p.forSale === true && p.status === 'verified' && (userId ? p.owner !== userId : true));
+
+      if (req.query.search) {
+        const s = req.query.search.toLowerCase();
+        properties = properties.filter(
+          (p) =>
+            p.propertyId.toLowerCase().includes(s) ||
+            p.surveyNumber.toLowerCase().includes(s) ||
+            p.district.toLowerCase().includes(s)
+        );
+      }
+
+      if (req.query.sort === 'price_asc') {
+        properties.sort((a, b) => a.listingPrice - b.listingPrice);
+      } else if (req.query.sort === 'price_desc') {
+        properties.sort((a, b) => b.listingPrice - a.listingPrice);
+      } else {
+        properties.sort((a, b) => new Date(b.listedAt) - new Date(a.listedAt));
+      }
+
+      return res.json({
+        success: true,
+        data: properties.slice(skip, skip + limit),
+        count: properties.length,
+        page,
+        limit,
+        demo: true,
+      });
+    }
+
+    const query = { forSale: true, status: 'verified' };
+    if (userId) query.owner = { $ne: userId };
+
+    if (req.query.search) {
+      const s = req.query.search;
+      query.$or = [
+        { propertyId: { $regex: s, $options: 'i' } },
+        { surveyNumber: { $regex: s, $options: 'i' } },
+        { district: { $regex: s, $options: 'i' } },
+      ];
+    }
+
+    if (req.query.minPrice) query.listingPrice = { $gte: parseInt(req.query.minPrice) };
+    if (req.query.maxPrice) query.listingPrice = { ...query.listingPrice, $lte: parseInt(req.query.maxPrice) };
+    if (req.query.district) query.district = req.query.district;
+
+    let sortObj = { listedAt: -1 };
+    if (req.query.sort === 'price_asc') sortObj = { listingPrice: 1 };
+    else if (req.query.sort === 'price_desc') sortObj = { listingPrice: -1 };
+
+    const items = await Property.find(query)
+      .populate('owner', 'fullName email phone')
+      .skip(skip)
+      .limit(limit)
+      .sort(sortObj);
+
+    const total = await Property.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: items,
+      count: items.length,
+      total,
+      page,
+      limit,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removePropertyFromSale = async (req, res, next) => {
+  try {
+    const { propertyId } = req.body;
+    const userId = req.user._id ?? req.user.id;
+
+    if (!propertyId) {
+      return res.status(400).json({ success: false, message: 'Property ID is required' });
+    }
+
+    const isDemoRemove = isDemoUser(req.user) || !isDbConnected();
+
+    if (isDemoRemove) {
+      const property = findDemoPropertyForOwner(userId, propertyId);
+      if (!property) {
+        return res.status(404).json({ success: false, message: 'Property not found or not owned by you' });
+      }
+
+      property.forSale = false;
+      property.listingPrice = null;
+      property.listingDescription = '';
+      property.listedAt = null;
+
+      return res.json({
+        success: true,
+        message: 'Property removed from sale',
+        data: property,
+        demo: true,
+      });
+    }
+
+    const property = await Property.findOne({ propertyId, owner: userId });
+    if (!property) {
+      return res.status(404).json({ success: false, message: 'Property not found or not owned by you' });
+    }
+
+    property.forSale = false;
+    property.listingPrice = null;
+    property.listingDescription = '';
+    property.listedAt = null;
+    await property.save();
+
+    res.json({
+      success: true,
+      message: 'Property removed from sale',
+      data: property,
     });
   } catch (error) {
     next(error);

@@ -33,9 +33,15 @@ const SearchVerifyPage = () => {
       else params.surveyNumber = data.surveyNumber;
 
       const res = await propertyAPI.search(params);
-      setResult(res.data);
+      if (res.data?.success) {
+        setResult(res.data);
+      } else {
+        toast.error(res.data?.message || 'Search failed');
+        setResult(null);
+      }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Search failed');
+      toast.error(err.response?.data?.message || 'Search failed. Please try again.');
+      setResult(null);
     } finally {
       setLoading(false);
     }

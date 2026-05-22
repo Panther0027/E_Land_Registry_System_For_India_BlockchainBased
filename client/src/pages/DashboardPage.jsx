@@ -12,6 +12,8 @@ import { propertyAPI } from '../services';
 import { formatDate } from '../utils';
 import { DashboardSkeleton } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
+import PropertyPurchasePanel from '../components/PropertyPurchasePanel';
+import RequestListPanel from '../components/RequestListPanel';
 
 const ownerActions = [
   { path: '/register-property', labelKey: 'property.register', icon: HiOutlineDocumentAdd, color: 'bg-primary text-white' },
@@ -131,6 +133,13 @@ const DashboardPage = () => {
         ) : (
           <EmptyState title={t('dashboard.noActivity')} description="Transactions will appear here." />
         )}
+      </div>
+
+      <div className="card">
+        <div className="grid md:grid-cols-2 gap-4">
+          <PropertyPurchasePanel />
+          <RequestListPanel />
+        </div>
       </div>
     </div>
   );

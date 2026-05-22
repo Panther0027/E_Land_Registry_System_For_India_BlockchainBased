@@ -34,6 +34,11 @@ const PropertyDetailPage = () => {
     queryFn: () => propertyAPI.getById(id).then((r) => r.data.data),
   });
 
+  const ownerName = data?.property?.owner?.fullName || data?.property?.ownerName || 'Unknown';
+  const walletAddress = data?.property?.owner?.walletAddress || '';
+  const createdAt = data?.property?.createdAt ? new Date(data.property.createdAt) : null;
+  const verifiedAt = data?.property?.verifiedAt ? new Date(data.property.verifiedAt) : null;
+
   const handleShare = async () => {
     const url = `${window.location.origin}/verify?id=${id}`;
     const ok = await copyToClipboard(url);
@@ -97,6 +102,9 @@ const PropertyDetailPage = () => {
             )}
           </div>
           <p className="text-text-secondary">Survey No: {property.surveyNumber}</p>
+              {property.demo && (
+                <p className="text-sm text-warning mt-2">This is a demo property record for offline/demo mode.</p>
+              )}
         </div>
         <div className="flex gap-2 flex-wrap">
           {property.status === 'verified' && (
@@ -127,9 +135,18 @@ const PropertyDetailPage = () => {
           <div className="space-y-3 text-sm">
             <div className="flex items-center gap-2"><HiOutlineLocationMarker className="text-secondary" /><span>{property.district}, {property.state} — {property.pincode}</span></div>
             <div className="flex items-center gap-2"><HiOutlineScale className="text-secondary" /><span>{formatArea(property.area)} • {property.landType}</span></div>
-            <div><span className="text-text-secondary">Owner: </span><span className="font-medium">{property.ownerName}</span></div>
+            <div><span className="text-text-secondary">Owner: </span><span className="font-medium">{ownerName}</span></div>
+            {walletAddress && (
+              <div><span className="text-text-secondary">Wallet: </span><span className="font-medium">{walletAddress}</span></div>
+            )}
             {property.verificationRemarks && (
               <div><span className="text-text-secondary">Remarks: </span><span>{property.verificationRemarks}</span></div>
+            )}
+            {createdAt && (
+              <div><span className="text-text-secondary">Registered: </span><span>{createdAt.toLocaleString()}</span></div>
+            )}
+            {verifiedAt && (
+              <div><span className="text-text-secondary">Verified: </span><span>{verifiedAt.toLocaleString()}</span></div>
             )}
             {property.transactionHash && (
               <div>
@@ -138,6 +155,12 @@ const PropertyDetailPage = () => {
                   className="text-primary hover:underline font-mono text-xs inline-flex items-center gap-1">
                   {truncateHash(property.transactionHash)} <HiOutlineExternalLink />
                 </a>
+              </div>
+            )}
+            {property.coOwners?.length > 0 && (
+              <div>
+                <span className="text-text-secondary">Co-owners: </span>
+                <span className="font-medium">{property.coOwners.map((co) => co.name).join(', ')}</span>
               </div>
             )}
           </div>

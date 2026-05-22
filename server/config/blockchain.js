@@ -34,7 +34,7 @@ export const initBlockchain = () => {
     return null;
   }
 
-  provider = new ethers.JsonRpcProvider(rpcUrl);
+  provider = new ethers.providers.JsonRpcProvider(rpcUrl);
   wallet = new ethers.Wallet(privateKey, provider);
   contract = new ethers.Contract(contractAddress, LAND_REGISTRY_ABI, wallet);
 

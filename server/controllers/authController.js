@@ -317,7 +317,7 @@ export const lookupOwnerByAadhaar = async (req, res, next) => {
     }
 
     const aadhaarHash = hashAadhaar(raw);
-    const user = await User.findOne({ aadhaarHash }).select('fullName email role');
+    const user = await User.findOne({ aadhaarHash }).select('fullName email phone role walletAddress');
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -327,7 +327,13 @@ export const lookupOwnerByAadhaar = async (req, res, next) => {
 
     res.json({
       success: true,
-      data: { fullName: user.fullName, email: user.email, role: user.role },
+      data: {
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        walletAddress: user.walletAddress,
+      },
     });
   } catch (error) {
     next(error);
