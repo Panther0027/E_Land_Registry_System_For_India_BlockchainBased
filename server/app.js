@@ -25,9 +25,29 @@ setupEventListeners(handleBlockchainEvent);
 
 app.use(helmet());
 const devMode = process.env.NODE_ENV !== 'production';
+
+// Support multiple allowed origins via comma-separated CLIENT_URL env var.
+// Normalize values (trim and strip trailing slash) to avoid mismatches.
+const clientUrlEnv = process.env.CLIENT_URL || 'http://localhost:5173';
+const allowedOrigins = clientUrlEnv
+  .split(',')
+  .map((u) => u.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+console.log('Allowed CORS origins:', allowedOrigins);
+
 app.use(
   cors({
-    origin: devMode ? true : process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: function (origin, callback) {
+      if (devMode) return callback(null, true);
+      // allow non-browser tools (curl/postman) where origin is undefined
+      if (!origin) return callback(null, true);
+        console.log('CORS origin check:', { origin });
+        const normalized = origin.replace(/\/$/, '');
+        console.log('CORS origin normalized:', normalized, 'allowedOrigins:', allowedOrigins);
+        if (allowedOrigins.indexOf(normalized) !== -1) return callback(null, true);
+        console.log('CORS rejected origin:', normalized);
+        return callback(new Error('CORS not allowed'));
+    },
     credentials: true,
   })
 );
