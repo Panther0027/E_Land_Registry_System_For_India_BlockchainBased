@@ -184,7 +184,7 @@ const PropertyDetailPage = () => {
           {property.documents?.length > 0 ? (
             <div className="space-y-2">
               {property.documents.map((doc, i) => (
-                <a key={i} href={`https://gateway.pinata.cloud/ipfs/${doc.ipfsHash}`} target="_blank" rel="noopener noreferrer"
+                <a key={i} href={`https://cloudflare-ipfs.com/ipfs/${doc.ipfsHash}`} target="_blank" rel="noopener noreferrer"
                   className="flex items-center justify-between p-3 bg-accent rounded-xl hover:bg-primary/5 transition-colors">
                   <span className="text-sm font-medium">{doc.name}</span>
                   <HiOutlineExternalLink className="text-primary" />

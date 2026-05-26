@@ -66,4 +66,4 @@ export const uploadJSONToIPFS = async (jsonData, name = 'data.json') => {
   return response.data.IpfsHash;
 };
 
-export const getIPFSUrl = (hash) => `https://gateway.pinata.cloud/ipfs/${hash}`;
+export const getIPFSUrl = (hash) => `https://cloudflare-ipfs.com/ipfs/${hash}`;
