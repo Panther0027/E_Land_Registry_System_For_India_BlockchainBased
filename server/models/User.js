@@ -59,6 +59,10 @@ const userSchema = new mongoose.Schema(
       enum: ['en', 'hi', 'or'],
       default: 'en',
     },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
     isActive: {
       type: Boolean,
       default: true,

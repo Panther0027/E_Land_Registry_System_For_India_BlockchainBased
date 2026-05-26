@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -19,6 +19,7 @@ const LoginPage = () => {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -28,9 +29,50 @@ const LoginPage = () => {
   const normalizePhoneNumber = (value) => {
     const cleaned = value.replace(/\D/g, '');
     if (cleaned.length === 10) return `+91${cleaned}`;
+    if (cleaned.length === 11 && cleaned.startsWith('0')) return `+91${cleaned.slice(1)}`;
     if (cleaned.length === 12 && cleaned.startsWith('91')) return `+${cleaned}`;
-    if (cleaned.length === 13 && cleaned.startsWith('+91')) return `+${cleaned.slice(1)}`;
     return null;
+  };
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined;
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => Math.max(prev - 1, 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  const sendLoginOtp = async () => {
+    if (!supabase) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    let data;
+    let error;
+    if (authMethod === 'email') {
+      const trimmedEmail = email.trim();
+      if (!isValidEmail(trimmedEmail)) {
+        throw new Error('Enter a valid email address.');
+      }
+      ({ data, error } = await supabase.auth.signInWithOtp({ email: trimmedEmail }));
+    } else {
+      const normalizedPhone = normalizePhoneNumber(phone);
+      if (!normalizedPhone) {
+        throw new Error('Enter your phone in the correct format: 9876543210, 09876543210, or +919876543210.');
+      }
+      ({ data, error } = await supabase.auth.signInWithOtp({ phone: normalizedPhone }));
+    }
+
+    if (error) {
+      const message =
+        error.status === 429 || /rate limit/i.test(error.message || '')
+          ? 'Too many requests. Please wait a minute before requesting another OTP.'
+          : error.error_description || error.message || 'Failed to send OTP.';
+      throw new Error(message);
+    }
+
+    setResendCooldown(60);
+    return data;
   };
 
   const startLogin = async () => {
@@ -44,39 +86,15 @@ const LoginPage = () => {
     }
 
     try {
-      let result;
-      if (authMethod === 'email') {
-        const trimmedEmail = email.trim();
-        if (!isValidEmail(trimmedEmail)) {
-          toast.error('Enter a valid email address.');
-          setLoading(false);
-          return;
-        }
-
-        result = await supabase.auth.signInWithOtp({ email: trimmedEmail });
-      } else {
-        const normalizedPhone = normalizePhoneNumber(phone);
-        if (!normalizedPhone) {
-          toast.error('Enter your 10-digit mobile number in the correct format (e.g. 9876543210 or +919876543210).');
-          setLoading(false);
-          return;
-        }
-
-        result = await supabase.auth.signInWithOtp({ phone: normalizedPhone });
-      }
-
-      if (result.error) {
-        throw result.error;
-      }
-
+      await sendLoginOtp();
       setStep('verify');
       setMessage(
         authMethod === 'email'
-          ? `OTP sent to ${email.trim()}. Check your inbox and enter the code below.`
+          ? `OTP sent to ${email.trim()}. Check your inbox and spam folder, then enter the code below.`
           : `OTP sent to ${normalizePhoneNumber(phone)}. Enter it below to continue.`
       );
     } catch (err) {
-      toast.error(err.error_description || err.message || 'Failed to send OTP.');
+      toast.error(err.message || 'Failed to send OTP.');
     } finally {
       setLoading(false);
     }
@@ -93,7 +111,8 @@ const LoginPage = () => {
     }
 
     try {
-      let result;
+      let data;
+      let error;
       if (authMethod === 'email') {
         const trimmedEmail = email.trim();
         if (!isValidEmail(trimmedEmail)) {
@@ -102,31 +121,34 @@ const LoginPage = () => {
           return;
         }
 
-        result = await supabase.auth.verifyOtp({
+        ({ data, error } = await supabase.auth.verifyOtp({
           type: 'email',
           token: otp,
           email: trimmedEmail,
-        });
+        }));
       } else {
         const normalizedPhone = normalizePhoneNumber(phone);
         if (!normalizedPhone) {
-          toast.error('Enter your mobile number again in the correct format.');
+          toast.error('Enter your phone in the correct format: 9876543210, 09876543210, or +919876543210.');
           setLoading(false);
           return;
         }
 
-        result = await supabase.auth.verifyOtp({
+        ({ data, error } = await supabase.auth.verifyOtp({
           type: 'sms',
           token: otp,
           phone: normalizedPhone,
-        });
+        }));
       }
 
-      if (result.error) {
-        throw result.error;
+      if (error) {
+        const message =
+          error.status === 429 || /rate limit/i.test(error.message || '')
+            ? 'Too many verification attempts. Please wait a minute and try again.'
+            : error.error_description || error.message || 'OTP verification failed.';
+        throw new Error(message);
       }
 
-      const data = result.data;
       if (!data?.session?.access_token) {
         toast.error('OTP verified, but login session was not created. Please try again.');
         setLoading(false);
@@ -143,7 +165,27 @@ const LoginPage = () => {
       toast.success(`Welcome back, ${user.fullName}!`);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      toast.error(err.error_description || err.message || 'OTP verification failed.');
+      toast.error(err.message || 'OTP verification failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendLoginOtp = async () => {
+    if (resendCooldown > 0) return;
+    setLoading(true);
+    setMessage('');
+
+    try {
+      await sendLoginOtp();
+      setMessage(
+        authMethod === 'email'
+          ? `OTP resent to ${email.trim()}. Check your inbox and spam folder.`
+          : `OTP resent to ${normalizePhoneNumber(phone)}. Enter it below to continue.`
+      );
+      toast.success('OTP resent successfully.');
+    } catch (err) {
+      toast.error(err.message || 'Unable to resend OTP.');
     } finally {
       setLoading(false);
     }
@@ -169,14 +211,24 @@ const LoginPage = () => {
             <button
               type="button"
               className={`rounded-lg border px-4 py-2 text-sm font-semibold ${authMethod === 'email' ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 bg-white text-text-secondary'}`}
-              onClick={() => setAuthMethod('email')}
+              onClick={() => {
+                setAuthMethod('email');
+                setStep('request');
+                setOtp('');
+                setMessage('');
+              }}
             >
               Email OTP
             </button>
             <button
               type="button"
               className={`rounded-lg border px-4 py-2 text-sm font-semibold ${authMethod === 'phone' ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 bg-white text-text-secondary'}`}
-              onClick={() => setAuthMethod('phone')}
+              onClick={() => {
+                setAuthMethod('phone');
+                setStep('request');
+                setOtp('');
+                setMessage('');
+              }}
             >
               Phone OTP
             </button>
@@ -216,9 +268,26 @@ const LoginPage = () => {
             Keep me signed in
           </label>
 
-          <Button type="button" loading={loading} className="w-full" onClick={step === 'request' ? startLogin : verifyLogin}>
-            {step === 'request' ? 'Send OTP' : 'Verify OTP'}
-          </Button>
+          {step === 'verify' ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button type="button" loading={loading} className="w-full" onClick={verifyLogin}>
+                Verify OTP
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={resendLoginOtp}
+                disabled={resendCooldown > 0}
+              >
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" loading={loading} className="w-full" onClick={startLogin}>
+              Send OTP
+            </Button>
+          )}
         </div>
 
         <p className="text-center mt-6 text-text-secondary">

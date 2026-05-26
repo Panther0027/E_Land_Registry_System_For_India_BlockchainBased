@@ -6,7 +6,7 @@ import { ethers } from 'ethers';
 import { isDemoModeEnabled, isOfflineMode } from '../config/appConfig.js';
 import { isDbConnected } from '../config/db.js';
 import { ensureDbConnection } from '../utils/ensureDb.js';
-import { supabaseAdmin } from '../config/supabase.js';
+import { supabaseAdmin, supabaseClient } from '../config/supabase.js';
 
 import { registerDemoUser, loginDemoUser } from '../services/demoAuthStore.js';
 
@@ -55,6 +55,11 @@ export const registerValidation = [
 export const loginValidation = [
   body('email').isEmail().withMessage('Valid email is required'),
   body('password').notEmpty().withMessage('Password is required'),
+];
+
+export const verifyRegistrationValidation = [
+  body('email').isEmail().withMessage('Valid email is required'),
+  body('otp').notEmpty().withMessage('OTP code is required'),
 ];
 
 export const validate = (req, res, next) => {
@@ -154,17 +159,16 @@ export const register = async (req, res, next) => {
         .join('')
         .toUpperCase()
         .slice(0, 2),
+      isVerified: false,
     });
-
-    const token = generateToken(user._id, user.role);
 
     if (supabaseAdmin) {
       try {
         await supabaseAdmin.auth.admin.createUser({
           email: normalizedEmail,
           phone,
-          email_confirm: true,
-          phone_confirm: true,
+          email_confirm: false,
+          phone_confirm: false,
           user_metadata: {
             fullName: fullName.trim(),
             role,
@@ -177,9 +181,8 @@ export const register = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Account created successfully',
+      message: 'Account created successfully. Please verify your email using the OTP sent to your inbox.',
       data: {
-        token,
         user: toAuthUser(user),
       },
     });
@@ -219,6 +222,13 @@ export const login = async (req, res, next) => {
       });
     }
 
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Please verify your account using the OTP sent to your email before logging in.',
+      });
+    }
+
     const token = generateToken(user._id, user.role);
 
     res.json({
@@ -231,6 +241,70 @@ export const login = async (req, res, next) => {
           notificationPreferences: user.notificationPreferences,
           language: user.language,
         },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const verifyRegistration = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and OTP are required for verification.',
+      });
+    }
+
+    if (!supabaseClient) {
+      return res.status(503).json({
+        success: false,
+        message: 'Supabase is not configured for OTP verification.',
+      });
+    }
+
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+      type: 'email',
+      token: otp,
+      email: normalizedEmail,
+    });
+
+    if (error) {
+      const message =
+        error.status === 429 || /rate limit/i.test(error.message || '')
+          ? 'Too many verification attempts. Please wait a minute and try again.'
+          : error.error_description || error.message || 'OTP verification failed.';
+      return res.status(400).json({ success: false, message });
+    }
+
+    const dbReady = await ensureDbConnection();
+    if (!dbReady) {
+      return dbUnavailableResponse(res);
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found. Please register first.',
+      });
+    }
+
+    user.isVerified = true;
+    await user.save();
+
+    const token = generateToken(user._id, user.role);
+
+    res.json({
+      success: true,
+      message: 'Account verified successfully.',
+      data: {
+        token,
+        user: toAuthUser(user),
       },
     });
   } catch (error) {

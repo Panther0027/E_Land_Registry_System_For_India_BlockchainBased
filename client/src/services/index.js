@@ -3,6 +3,7 @@ import api from './api';
 export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
+  verifyRegistration: (data) => api.post('/auth/verify-registration', data),
   getProfile: () => api.get('/auth/profile'),
   updateProfile: (data) => api.put('/auth/profile', data),
   linkWallet: (data) => api.put('/auth/wallet', data),
