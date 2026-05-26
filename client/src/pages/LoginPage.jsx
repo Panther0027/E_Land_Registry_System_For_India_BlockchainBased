@@ -64,10 +64,14 @@ const LoginPage = () => {
     }
 
     if (error) {
+      const isRateLimit = error.status === 429 || /rate limit/i.test(error.message || '');
       const message =
-        error.status === 429 || /rate limit/i.test(error.message || '')
+        isRateLimit
           ? 'Too many requests. Please wait a minute before requesting another OTP.'
           : error.error_description || error.message || 'Failed to send OTP.';
+      if (isRateLimit && resendCooldown === 0) {
+        setResendCooldown(60);
+      }
       throw new Error(message);
     }
 
@@ -76,6 +80,11 @@ const LoginPage = () => {
   };
 
   const startLogin = async () => {
+    if (resendCooldown > 0) {
+      toast.error(`Please wait ${resendCooldown}s before requesting another OTP.`);
+      return;
+    }
+
     setLoading(true);
     setMessage('');
 
@@ -284,8 +293,14 @@ const LoginPage = () => {
               </Button>
             </div>
           ) : (
-            <Button type="button" loading={loading} className="w-full" onClick={startLogin}>
-              Send OTP
+            <Button
+              type="button"
+              loading={loading}
+              className="w-full"
+              onClick={startLogin}
+              disabled={resendCooldown > 0}
+            >
+              {resendCooldown > 0 ? `Send OTP in ${resendCooldown}s` : 'Send OTP'}
             </Button>
           )}
         </div>
