@@ -162,21 +162,32 @@ export const register = async (req, res, next) => {
       isVerified: false,
     });
 
-    if (supabaseAdmin) {
-      try {
-        await supabaseAdmin.auth.admin.createUser({
-          email: normalizedEmail,
-          phone,
-          email_confirm: false,
-          phone_confirm: false,
-          user_metadata: {
-            fullName: fullName.trim(),
-            role,
-          },
-        });
-      } catch (supabaseError) {
-        console.warn('Supabase user creation failed:', supabaseError.message || supabaseError);
-      }
+    if (!supabaseAdmin) {
+      await User.findByIdAndDelete(user._id);
+      return res.status(503).json({
+        success: false,
+        message: 'Supabase is not configured for email OTP verification. Please contact support.',
+      });
+    }
+
+    try {
+      await supabaseAdmin.auth.admin.createUser({
+        email: normalizedEmail,
+        phone,
+        email_confirm: false,
+        phone_confirm: false,
+        user_metadata: {
+          fullName: fullName.trim(),
+          role,
+        },
+      });
+    } catch (supabaseError) {
+      await User.findByIdAndDelete(user._id);
+      return res.status(500).json({
+        success: false,
+        message:
+          'Unable to create email authentication user for OTP verification. Please try again later.',
+      });
     }
 
     res.status(201).json({
@@ -425,6 +436,113 @@ export const lookupOwnerByAadhaar = async (req, res, next) => {
         phone: user.phone,
         role: user.role,
         walletAddress: user.walletAddress,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Request OTP for login: validate email + password, send OTP via Supabase
+ */
+export const loginRequestOtp = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const dbReady = await ensureDbConnection();
+    if (!dbReady) {
+      return dbUnavailableResponse(res);
+    }
+
+    // Validate credentials against database
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
+    if (!user || !(await user.comparePassword(password))) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password',
+      });
+    }
+
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Please verify your account using the OTP sent to your email before logging in.',
+      });
+    }
+
+    // Send OTP via Supabase will be handled by frontend
+    // This endpoint just validates that the user exists and credentials are correct
+    res.json({
+      success: true,
+      message: 'Credentials verified. OTP will be sent to your email.',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Verify OTP for login: verify OTP with Supabase and return token
+ */
+export const loginVerifyOtp = async (req, res, next) => {
+  try {
+    const { email, otp } = req.body;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and OTP are required for verification.',
+      });
+    }
+
+    if (!supabaseClient) {
+      return res.status(503).json({
+        success: false,
+        message: 'Supabase is not configured for OTP verification.',
+      });
+    }
+
+    // Verify OTP with Supabase
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+      type: 'email',
+      token: otp,
+      email: normalizedEmail,
+    });
+
+    if (error) {
+      const message =
+        error.status === 429 || /rate limit/i.test(error.message || '')
+          ? 'Too many verification attempts. Please wait a minute and try again.'
+          : error.error_description || error.message || 'OTP verification failed.';
+      return res.status(400).json({ success: false, message });
+    }
+
+    const dbReady = await ensureDbConnection();
+    if (!dbReady) {
+      return dbUnavailableResponse(res);
+    }
+
+    // Find user in database
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found. Please register first.',
+      });
+    }
+
+    // Generate token for login
+    const token = generateToken(user._id, user.role);
+
+    res.json({
+      success: true,
+      message: 'Login successful.',
+      data: {
+        token,
+        user: toAuthUser(user),
       },
     });
   } catch (error) {

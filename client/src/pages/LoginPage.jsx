@@ -14,9 +14,10 @@ const OTP_REQUEST_COOLDOWN = 30;
 
 const LoginPage = () => {
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState('request');
+  const [step, setStep] = useState('credentials');
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -34,17 +35,37 @@ const LoginPage = () => {
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
-  const sendLoginOtp = async () => {
+  const sendLoginOtp = async (credEmail, credPassword) => {
     if (!supabase) {
       throw new Error('Supabase is not configured.');
     }
 
-    let data;
-    let error;
-    const trimmedEmail = email.trim();
+    const trimmedEmail = credEmail.trim();
     if (!isValidEmail(trimmedEmail)) {
       throw new Error('Enter a valid email address.');
     }
+    
+    if (!credPassword || credPassword.length < 6) {
+      throw new Error('Enter a valid password.');
+    }
+
+    // First, validate credentials with backend
+    try {
+      const response = await api.post('/auth/login/request-otp', {
+        email: trimmedEmail,
+        password: credPassword,
+      });
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Invalid credentials.');
+      }
+    } catch (err) {
+      const message = err.response?.data?.message || err.message || 'Invalid email or password.';
+      throw new Error(message);
+    }
+
+    // Then send OTP via Supabase
+    let data;
+    let error;
     ({ data, error } = await supabase.auth.signInWithOtp({
       email: trimmedEmail,
       options: {
@@ -69,6 +90,11 @@ const LoginPage = () => {
   };
 
   const startLogin = async () => {
+    if (!email.trim() || !password) {
+      toast.error('Enter your email and password.');
+      return;
+    }
+
     if (resendCooldown > 0) {
       toast.error(`Please wait ${resendCooldown}s before requesting another OTP.`);
       return;
@@ -84,8 +110,8 @@ const LoginPage = () => {
     }
 
     try {
-      await sendLoginOtp();
-      setStep('verify');
+      await sendLoginOtp(email, password);
+      setStep('otp');
       setMessage(`OTP sent to ${email.trim()}. Check your inbox and spam folder, then enter the code below.`);
     } catch (err) {
       toast.error(err.message || 'Failed to send OTP.');
@@ -98,15 +124,13 @@ const LoginPage = () => {
     setLoading(true);
     setMessage('');
 
-    if (!supabase) {
-      toast.error('Supabase is not configured.');
+    if (!otp.trim()) {
+      toast.error('Enter the OTP sent to your email.');
       setLoading(false);
       return;
     }
 
     try {
-      let data;
-      let error;
       const trimmedEmail = email.trim();
       if (!isValidEmail(trimmedEmail)) {
         toast.error('Enter a valid email address.');
@@ -114,46 +138,23 @@ const LoginPage = () => {
         return;
       }
 
-      ({ data, error } = await supabase.auth.verifyOtp({
-        type: 'email',
-        token: otp,
+      // Verify OTP with backend
+      const response = await api.post('/auth/login/verify-otp', {
         email: trimmedEmail,
-      }));
+        otp: otp.trim(),
+      });
 
-      if (error) {
-        const message =
-          error.status === 429 || /rate limit/i.test(error.message || '')
-            ? 'Too many verification attempts. Please wait a minute and try again.'
-            : error.error_description || error.message || 'OTP verification failed.';
-        throw new Error(message);
+      if (!response.data.success || !response.data.data?.token) {
+        throw new Error(response.data.message || 'OTP verification failed.');
       }
 
-      if (!data?.session?.access_token) {
-        toast.error('OTP verified, but login session was not created. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      const token = data.session.access_token;
-      let user = data.user;
-
-      try {
-        const profileResponse = await api.get('/auth/profile', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        user = profileResponse.data.data || user;
-      } catch (profileError) {
-        if (profileError.response?.status !== 404) {
-          throw profileError;
-        }
-        toast.success('OTP verified. Logged in, but backend profile is unavailable; continuing with your account details.');
-      }
-
+      const { token, user } = response.data.data;
       setAuth(user, token, rememberMe);
       toast.success(`Welcome back, ${user?.fullName || user?.email || 'Bhumi user'}!`);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      toast.error(err.message || 'OTP verification failed.');
+      const message = err.response?.data?.message || err.message || 'OTP verification failed.';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -165,7 +166,7 @@ const LoginPage = () => {
     setMessage('');
 
     try {
-      await sendLoginOtp();
+      await sendLoginOtp(email, password);
       setMessage(`OTP resent to ${email.trim()}. Check your inbox and spam folder.`);
       toast.success('OTP resent successfully.');
     } catch (err) {
@@ -182,11 +183,13 @@ const LoginPage = () => {
       className="min-h-screen bg-accent bg-earth-texture flex items-center justify-center p-4"
     >
       <motion.div className="w-full max-w-md">
-        <motion.div className="text-center mb-8">
+      <motion.div className="text-center mb-8">
           <Logo className="justify-center mb-4" />
-          <h1 className="font-display text-2xl font-bold text-primary">Sign in with OTP</h1>
+          <h1 className="font-display text-2xl font-bold text-primary">Sign in with Email & OTP</h1>
           <p className="text-text-secondary mt-1">
-            Enter your email to receive a one-time passcode for login.
+            {step === 'credentials' 
+              ? 'Enter your email and password to receive a one-time passcode.'
+              : 'Enter the one-time passcode sent to your email.'}
           </p>
         </motion.div>
 
@@ -200,9 +203,20 @@ const LoginPage = () => {
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={step === 'otp'}
             />
 
-            {step === 'verify' ? (
+            <Input
+              label="Password"
+              type="password"
+              icon={HiOutlineLockClosed}
+              placeholder={step === 'credentials' ? 'Enter your password' : 'Password used for login'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={step === 'otp'}
+            />
+
+            {step === 'otp' ? (
               <Input
                 label="One-time passcode"
                 type="text"
@@ -216,17 +230,19 @@ const LoginPage = () => {
 
           {message ? <p className="text-sm text-text-secondary">{message}</p> : null}
 
-          <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
-            <input
-              type="checkbox"
-              className="rounded border-gray-300 text-primary focus:ring-primary"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-            />
-            Keep me signed in
-          </label>
+          {step === 'credentials' ? (
+            <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+              <input
+                type="checkbox"
+                className="rounded border-gray-300 text-primary focus:ring-primary"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              Keep me signed in
+            </label>
+          ) : null}
 
-          {step === 'verify' ? (
+          {step === 'otp' ? (
             <div className="grid gap-3 sm:grid-cols-2">
               <Button type="button" loading={loading} className="w-full" onClick={verifyLogin}>
                 Verify OTP

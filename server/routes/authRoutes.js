@@ -7,6 +7,8 @@ import {
   updateProfile,
   linkWallet,
   lookupOwnerByAadhaar,
+  loginRequestOtp,
+  loginVerifyOtp,
   registerValidation,
   verifyRegistrationValidation,
   loginValidation,
@@ -19,6 +21,8 @@ const router = Router();
 router.post('/register', registerValidation, validate, register);
 router.post('/verify-registration', verifyRegistrationValidation, validate, verifyRegistration);
 router.post('/login', loginValidation, validate, login);
+router.post('/login/request-otp', loginValidation, validate, loginRequestOtp);
+router.post('/login/verify-otp', verifyRegistrationValidation, validate, loginVerifyOtp);
 router.get('/profile', protect, getProfile);
 router.get('/lookup-owner', protect, lookupOwnerByAadhaar);
 router.put('/profile', protect, updateProfile);
