@@ -6,6 +6,7 @@ import { ethers } from 'ethers';
 import { isDemoModeEnabled, isOfflineMode } from '../config/appConfig.js';
 import { isDbConnected } from '../config/db.js';
 import { ensureDbConnection } from '../utils/ensureDb.js';
+import { supabaseAdmin } from '../config/supabase.js';
 
 import { registerDemoUser, loginDemoUser } from '../services/demoAuthStore.js';
 
@@ -156,6 +157,23 @@ export const register = async (req, res, next) => {
     });
 
     const token = generateToken(user._id, user.role);
+
+    if (supabaseAdmin) {
+      try {
+        await supabaseAdmin.auth.admin.createUser({
+          email: normalizedEmail,
+          phone,
+          email_confirm: true,
+          phone_confirm: true,
+          user_metadata: {
+            fullName: fullName.trim(),
+            role,
+          },
+        });
+      } catch (supabaseError) {
+        console.warn('Supabase user creation failed:', supabaseError.message || supabaseError);
+      }
+    }
 
     res.status(201).json({
       success: true,

@@ -179,50 +179,50 @@ const run = async () => {
   const uniqueOwners = [...new Set(rows.map((r) => r.OwnerName))];
 
   let primaryUser = null;
-  if (IMPORT_TO_GOVERNMENT) {
-    uniqueOwners.forEach((name) => ownerMap.set(name, official));
-    console.log('Import mode: all dataset properties will be assigned to the government official account.');
-  } else if (process.env.REGISTRY_PRIMARY_EMAIL) {
-    const aadhaar = (process.env.REGISTRY_PRIMARY_AADHAAR || generateAadhaarFromSeed('primary')).replace(/\D/g, '');
-    primaryUser = await User.create({
-      fullName: (process.env.REGISTRY_PRIMARY_FULL_NAME || 'Primary Registry Owner').trim(),
-      email: process.env.REGISTRY_PRIMARY_EMAIL.toLowerCase().trim(),
-      phone: process.env.REGISTRY_PRIMARY_PHONE || '9876543210',
-      aadhaarHash: hashAadhaar(aadhaar),
-      aadhaarLast4: aadhaar.slice(-4),
-      password: process.env.REGISTRY_PRIMARY_PASSWORD || DEFAULT_PASSWORD,
-      role: 'owner',
-      walletAddress: ethers.Wallet.createRandom().address,
-      avatarInitials: (process.env.REGISTRY_PRIMARY_FULL_NAME || 'PO')
-        .trim()
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2),
-    });
-    console.log(`Primary owner: ${primaryUser.email} (all ${rows.length} properties)`);
-  }
+  uniqueOwners.forEach((name) => ownerMap.set(name, official));
+  console.log('Import mode: all dataset properties will be assigned to the government official account.');
 
-  for (const name of uniqueOwners) {
-    if (primaryUser) {
-      ownerMap.set(name, primaryUser);
-      continue;
+  if (process.env.REGISTRY_IMPORT_TO_GOV === 'false') {
+    if (process.env.REGISTRY_PRIMARY_EMAIL) {
+      const aadhaar = (process.env.REGISTRY_PRIMARY_AADHAAR || generateAadhaarFromSeed('primary')).replace(/\D/g, '');
+      primaryUser = await User.create({
+        fullName: (process.env.REGISTRY_PRIMARY_FULL_NAME || 'Primary Registry Owner').trim(),
+        email: process.env.REGISTRY_PRIMARY_EMAIL.toLowerCase().trim(),
+        phone: process.env.REGISTRY_PRIMARY_PHONE || '9876543210',
+        aadhaarHash: hashAadhaar(aadhaar),
+        aadhaarLast4: aadhaar.slice(-4),
+        password: process.env.REGISTRY_PRIMARY_PASSWORD || DEFAULT_PASSWORD,
+        role: 'owner',
+        walletAddress: ethers.Wallet.createRandom().address,
+        avatarInitials: (process.env.REGISTRY_PRIMARY_FULL_NAME || 'PO')
+          .trim()
+          .split(' ')
+          .map((n) => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2),
+      });
+      uniqueOwners.forEach((name) => ownerMap.set(name, primaryUser));
+      console.log(`Primary owner: ${primaryUser.email} (all ${rows.length} properties)`);
+    } else {
+      for (const name of uniqueOwners) {
+        const aadhaar = generateAadhaarFromSeed(`owner-${name}`);
+        const email = `${slugify(name)}@landregistry.bhumi`;
+        const user = await User.create({
+          fullName: name,
+          email,
+          phone: String(6000000000 + (Math.abs(name.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % 3999999999)),
+          aadhaarHash: hashAadhaar(aadhaar),
+          aadhaarLast4: aadhaar.slice(-4),
+          password: DEFAULT_PASSWORD,
+          role: 'owner',
+          walletAddress: ethers.Wallet.createRandom().address,
+          avatarInitials: name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2),
+        });
+        ownerMap.set(name, user);
+      }
+      console.log('Import mode disabled government assignment; properties will use dataset owners instead.');
     }
-    const aadhaar = generateAadhaarFromSeed(`owner-${name}`);
-    const email = `${slugify(name)}@landregistry.bhumi`;
-    const user = await User.create({
-      fullName: name,
-      email,
-      phone: String(6000000000 + (Math.abs(name.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % 3999999999)),
-      aadhaarHash: hashAadhaar(aadhaar),
-      aadhaarLast4: aadhaar.slice(-4),
-      password: DEFAULT_PASSWORD,
-      role: 'owner',
-      walletAddress: ethers.Wallet.createRandom().address,
-      avatarInitials: name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2),
-    });
-    ownerMap.set(name, user);
   }
 
   const propertyDocs = [];
