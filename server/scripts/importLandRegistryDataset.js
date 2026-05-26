@@ -10,6 +10,10 @@
  *   REGISTRY_PRIMARY_FULL_NAME=Your Full Name
  *   REGISTRY_PRIMARY_PHONE=9876543210
  *   REGISTRY_PRIMARY_AADHAAR=789012345674
+ *
+ * To pin generated documents and JSON manifests in Pinata:
+ *   PINATA_API_KEY=...
+ *   PINATA_SECRET_KEY=...
  */
 import dotenv from 'dotenv';
 import path from 'path';
@@ -25,7 +29,7 @@ import Notification from '../models/Notification.js';
 import { hashAadhaar } from '../utils/crypto.js';
 import { generateAadhaarFromSeed } from '../utils/aadhaarGenerator.js';
 import { uploadToIPFS, uploadJSONToIPFS } from '../config/pinata.js';
-import { createFakeDocumentImage, cleanupFakeDocumentFile } from '../utils/fakeDocumentGenerator.js';
+import { createFakeDocumentPdf, cleanupFakeDocumentFile } from '../utils/fakeDocumentGenerator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
@@ -87,9 +91,9 @@ const safeUploadToIPFS = async (filePath, fileName) => {
   }
 };
 
-const safeUploadJSONToIPFS = async (jsonData) => {
+const safeUploadJSONToIPFS = async (jsonData, name) => {
   try {
-    return await uploadJSONToIPFS(jsonData);
+    return await uploadJSONToIPFS(jsonData, name);
   } catch (error) {
     console.warn('IPFS JSON upload failed, using mock hash:', error.message);
     return `QmMockJSON${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
@@ -97,11 +101,12 @@ const safeUploadJSONToIPFS = async (jsonData) => {
 };
 
 const createFakeDocumentForProperty = async (propertyId, docType, ownerName, location) => {
-  const filePath = createFakeDocumentImage(propertyId, docType, { ownerName, location });
+  const filePath = await createFakeDocumentPdf(propertyId, docType, { ownerName, location });
   try {
-    const ipfsHash = await safeUploadToIPFS(filePath, `${propertyId}-${docType}.svg`);
+    const fileName = `${propertyId}-${docType}.pdf`;
+    const ipfsHash = await safeUploadToIPFS(filePath, fileName);
     return {
-      name: `${propertyId}-${docType}.svg`,
+      name: fileName,
       type: docType,
       ipfsHash,
     };
@@ -242,7 +247,25 @@ const run = async () => {
 
     const deedDoc = await createFakeDocumentForProperty(propertyId, 'deed', owner.fullName, `${loc}, ${meta.state}`);
     const proofDoc = await createFakeDocumentForProperty(propertyId, 'ownership_proof', owner.fullName, `${loc}, ${meta.state}`);
-    const propertyIpfsHash = externalIpfsHash || deedDoc.ipfsHash;
+    const manifestPayload = {
+      propertyId,
+      surveyNumber: `SN-${rawId.toUpperCase()}`,
+      ownerName: owner.fullName,
+      ownerEmail: owner.email,
+      district: loc,
+      state: meta.state,
+      pincode: meta.pincode,
+      area,
+      landType: landTypeFromArea(area),
+      status,
+      createdAt: new Date().toISOString(),
+      documents: [
+        { name: deedDoc.name, type: deedDoc.type, ipfsHash: deedDoc.ipfsHash },
+        { name: proofDoc.name, type: proofDoc.type, ipfsHash: proofDoc.ipfsHash },
+      ],
+    };
+    const manifestHash = await safeUploadJSONToIPFS(manifestPayload, `data-${propertyId}.json`);
+    const propertyIpfsHash = externalIpfsHash || manifestHash || deedDoc.ipfsHash;
 
     propertyDocs.push({
       propertyId,

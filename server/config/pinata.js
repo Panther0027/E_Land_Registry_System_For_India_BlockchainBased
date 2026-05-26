@@ -34,17 +34,26 @@ export const uploadToIPFS = async (filePath, fileName) => {
   return response.data.IpfsHash;
 };
 
-export const uploadJSONToIPFS = async (jsonData) => {
+export const uploadJSONToIPFS = async (jsonData, name = 'data.json') => {
   const apiKey = process.env.PINATA_API_KEY;
   const secretKey = process.env.PINATA_SECRET_KEY;
 
   if (!apiKey || !secretKey) {
+    console.warn('Pinata not configured. Using mock IPFS hash for JSON payload.');
     return `QmMockJSON${Date.now()}`;
   }
 
+  const payload = {
+    pinataContent: jsonData,
+    pinataMetadata: {
+      name,
+      keyvalues: { app: 'bhumi-land-registry' },
+    },
+  };
+
   const response = await axios.post(
     `${PINATA_API_URL}/pinning/pinJSONToIPFS`,
-    jsonData,
+    payload,
     {
       headers: {
         'Content-Type': 'application/json',
