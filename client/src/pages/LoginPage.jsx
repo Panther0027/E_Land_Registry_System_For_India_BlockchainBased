@@ -20,6 +20,7 @@ const LoginPage = () => {
   const [otp, setOtp] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [processingLink, setProcessingLink] = useState(false);
 
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -42,6 +43,48 @@ const LoginPage = () => {
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
+  useEffect(() => {
+    const handleMagicLinkSignIn = async () => {
+      if (!supabase) return;
+
+      const url = new URL(window.location.href);
+      const hasAuthFragment = window.location.hash.includes('access_token') || window.location.hash.includes('type');
+      if (!url.searchParams.has('access_token') && !url.searchParams.has('type') && !hasAuthFragment) return;
+
+      setProcessingLink(true);
+      try {
+        const { data, error } = await supabase.auth.getSessionFromUrl({ storeSession: false });
+        if (error) {
+          toast.error(error.message || 'Unable to process the login link. Please try again.');
+          return;
+        }
+
+        const session = data?.session;
+        if (!session?.access_token) {
+          toast.error('Login link was opened, but no session was created. Please try signing in again.');
+          return;
+        }
+
+        const token = session.access_token;
+        const profileResponse = await api.get('/auth/profile', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const user = profileResponse.data.data;
+        setAuth(user, token, true);
+        toast.success(`Welcome back, ${user.fullName}!`);
+        navigate('/dashboard', { replace: true });
+      } catch (err) {
+        toast.error(err.message || 'Failed to complete login from email link.');
+      } finally {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setProcessingLink(false);
+      }
+    };
+
+    handleMagicLinkSignIn();
+  }, [navigate, setAuth]);
+
   const sendLoginOtp = async () => {
     if (!supabase) {
       throw new Error('Supabase is not configured.');
@@ -54,7 +97,12 @@ const LoginPage = () => {
       if (!isValidEmail(trimmedEmail)) {
         throw new Error('Enter a valid email address.');
       }
-      ({ data, error } = await supabase.auth.signInWithOtp({ email: trimmedEmail }));
+      ({ data, error } = await supabase.auth.signInWithOtp({
+        email: trimmedEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
+      }));
     } else {
       const normalizedPhone = normalizePhoneNumber(phone);
       if (!normalizedPhone) {
@@ -295,12 +343,12 @@ const LoginPage = () => {
           ) : (
             <Button
               type="button"
-              loading={loading}
+              loading={loading || processingLink}
               className="w-full"
               onClick={startLogin}
-              disabled={resendCooldown > 0}
+              disabled={resendCooldown > 0 || processingLink}
             >
-              {resendCooldown > 0 ? `Send OTP in ${resendCooldown}s` : 'Send OTP'}
+              {processingLink ? 'Completing login…' : resendCooldown > 0 ? `Send OTP in ${resendCooldown}s` : 'Send OTP'}
             </Button>
           )}
         </div>
