@@ -10,6 +10,8 @@ import supabase from '../services/supabase';
 import api from '../services/api';
 import { useAuthStore } from '../store';
 
+const OTP_REQUEST_COOLDOWN = 120;
+
 const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState('request');
@@ -49,15 +51,15 @@ const LoginPage = () => {
       const isRateLimit = error.status === 429 || /rate limit/i.test(error.message || '');
       const message =
         isRateLimit
-          ? 'Too many requests. Please wait a minute before requesting another OTP.'
+          ? 'Too many requests. Please wait a moment before requesting another OTP.'
           : error.error_description || error.message || 'Failed to send OTP.';
-      if (isRateLimit && resendCooldown === 0) {
-        setResendCooldown(60);
+      if (isRateLimit) {
+        setResendCooldown(OTP_REQUEST_COOLDOWN);
       }
       throw new Error(message);
     }
 
-    setResendCooldown(60);
+    setResendCooldown(OTP_REQUEST_COOLDOWN);
     return data;
   };
 
