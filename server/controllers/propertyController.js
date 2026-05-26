@@ -353,7 +353,7 @@ export const getPropertiesByOwner = async (req, res, next) => {
     }
 
     const { status, search, sort = 'newest' } = req.query;
-    const query = { owner: req.user._id };
+    const query = {}; // show all properties to every registered user
 
     if (status && status !== 'all') query.status = status;
     if (search) {
@@ -1185,7 +1185,7 @@ export const getAllDocuments = async (req, res, next) => {
       });
     }
 
-    const properties = await Property.find({ owner: req.user._id }).select(
+    const properties = await Property.find({}).select(
       'propertyId district state documents ipfsHash'
     );
 
