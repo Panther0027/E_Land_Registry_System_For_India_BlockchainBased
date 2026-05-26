@@ -24,12 +24,16 @@ import Transaction from '../models/Transaction.js';
 import Notification from '../models/Notification.js';
 import { hashAadhaar } from '../utils/crypto.js';
 import { generateAadhaarFromSeed } from '../utils/aadhaarGenerator.js';
+import { uploadToIPFS, uploadJSONToIPFS } from '../config/pinata.js';
+import { createFakeDocumentImage, cleanupFakeDocumentFile } from '../utils/fakeDocumentGenerator.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '..', '.env') });
 
 const DEFAULT_PASSWORD = process.env.DEFAULT_IMPORT_PASSWORD || 'Bhumi@2026';
 const GOV_PASSWORD = process.env.GOV_IMPORT_PASSWORD || 'BhumiGov@2026';
+const IMPORT_TO_GOVERNMENT = process.env.REGISTRY_IMPORT_TO_GOV !== 'false';
+const PINATA_CONFIGURED = Boolean(process.env.PINATA_API_KEY && process.env.PINATA_SECRET_KEY);
 
 const LOCATION_META = {
   Bhubaneswar: { pincode: '751001', state: 'Odisha' },
@@ -59,6 +63,53 @@ const slugify = (name) =>
     .replace(/[^a-z0-9]+/g, '.')
     .replace(/^\.|\.$/g, '');
 
+const normalizeRowField = (row, ...keys) => {
+  for (const rawKey of keys) {
+    const key = rawKey?.trim();
+    if (!key) continue;
+    if (Object.prototype.hasOwnProperty.call(row, key)) return row[key];
+    const compact = key.replace(/\s+/g, '');
+    if (Object.prototype.hasOwnProperty.call(row, compact)) return row[compact];
+    const lower = key.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(row, lower)) return row[lower];
+    const lowerCompact = compact.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(row, lowerCompact)) return row[lowerCompact];
+  }
+  return undefined;
+};
+
+const safeUploadToIPFS = async (filePath, fileName) => {
+  try {
+    return await uploadToIPFS(filePath, fileName);
+  } catch (error) {
+    console.warn('IPFS upload failed, using mock hash:', error.message);
+    return `QmMock${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+  }
+};
+
+const safeUploadJSONToIPFS = async (jsonData) => {
+  try {
+    return await uploadJSONToIPFS(jsonData);
+  } catch (error) {
+    console.warn('IPFS JSON upload failed, using mock hash:', error.message);
+    return `QmMockJSON${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+  }
+};
+
+const createFakeDocumentForProperty = async (propertyId, docType, ownerName, location) => {
+  const filePath = createFakeDocumentImage(propertyId, docType, { ownerName, location });
+  try {
+    const ipfsHash = await safeUploadToIPFS(filePath, `${propertyId}-${docType}.svg`);
+    return {
+      name: `${propertyId}-${docType}.svg`,
+      type: docType,
+      ipfsHash,
+    };
+  } finally {
+    cleanupFakeDocumentFile(filePath);
+  }
+};
+
 const readDataset = (filePath) => {
   if (!fs.existsSync(filePath)) {
     throw new Error(`Dataset not found: ${filePath}`);
@@ -74,6 +125,13 @@ const run = async () => {
     path.join(__dirname, '..', '..', 'data', 'land_registry_dataset_10000.xlsx');
 
   const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/bhumi';
+
+  if (!PINATA_CONFIGURED) {
+    console.warn('\nWARNING: Pinata credentials are not configured. The import will use mock IPFS hashes and will not pin documents to your Pinata account.');
+    console.warn('Set PINATA_API_KEY and PINATA_SECRET_KEY in your .env to pin documents to your account.\n');
+  } else {
+    console.log('Pinata credentials detected. Documents will be pinned to your Pinata account.');
+  }
   await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
   console.log('Connected to MongoDB');
   console.log('Reading dataset:', datasetPath);
@@ -116,7 +174,10 @@ const run = async () => {
   const uniqueOwners = [...new Set(rows.map((r) => r.OwnerName))];
 
   let primaryUser = null;
-  if (process.env.REGISTRY_PRIMARY_EMAIL) {
+  if (IMPORT_TO_GOVERNMENT) {
+    uniqueOwners.forEach((name) => ownerMap.set(name, official));
+    console.log('Import mode: all dataset properties will be assigned to the government official account.');
+  } else if (process.env.REGISTRY_PRIMARY_EMAIL) {
     const aadhaar = (process.env.REGISTRY_PRIMARY_AADHAAR || generateAadhaarFromSeed('primary')).replace(/\D/g, '');
     primaryUser = await User.create({
       fullName: (process.env.REGISTRY_PRIMARY_FULL_NAME || 'Primary Registry Owner').trim(),
@@ -164,15 +225,24 @@ const run = async () => {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rawId = String(row.PropertyID || row.propertyId || i).trim();
+    const rawId = String(
+      normalizeRowField(row, 'PropertyID', 'Property ID', 'propertyId', 'property id') || i
+    ).trim();
     const propertyId = `LR-${rawId.toUpperCase()}`;
-    const owner = ownerMap.get(row.OwnerName);
-    const loc = row.Location || 'Bhubaneswar';
+    const ownerName = String(
+      normalizeRowField(row, 'OwnerName', 'Owner Name', 'ownerName', 'owner name') || 'Government Registry'
+    ).trim();
+    const owner = ownerMap.get(ownerName) || official;
+    const loc = String(normalizeRowField(row, 'Location', 'location') || 'Bhubaneswar').trim();
     const meta = LOCATION_META[loc] || LOCATION_META.Bhubaneswar;
-    const area = Math.round(Number(row.LandSize_sqft) || 1000);
-    const txCount = Number(row.TransactionCount) || 1;
+    const area = Math.round(Number(normalizeRowField(row, 'LandSize_sqft', 'LandSize (sqft)', 'landSizeSqft', 'land size sqft')) || 1000);
+    const txCount = Number(normalizeRowField(row, 'TransactionCount', 'Transaction Count', 'transactionCount') || 1);
     const status = statusFromTxCount(txCount);
-    const ipfsHash = String(row.IPFS_Hash || row.ipfs_hash || `QmDataset${rawId}`);
+    const externalIpfsHash = String(normalizeRowField(row, 'IPFS_Hash', 'IPFS Hash', 'ipfs_hash', 'ipfsHash') || '').trim();
+
+    const deedDoc = await createFakeDocumentForProperty(propertyId, 'deed', owner.fullName, `${loc}, ${meta.state}`);
+    const proofDoc = await createFakeDocumentForProperty(propertyId, 'ownership_proof', owner.fullName, `${loc}, ${meta.state}`);
+    const propertyIpfsHash = externalIpfsHash || deedDoc.ipfsHash;
 
     propertyDocs.push({
       propertyId,
@@ -186,15 +256,12 @@ const run = async () => {
       area,
       landType: landTypeFromArea(area),
       status,
-      ipfsHash,
+      ipfsHash: propertyIpfsHash,
       blockchainVerified: status === 'verified',
       verifiedBy: status === 'verified' ? official._id : undefined,
       verifiedAt: status === 'verified' ? new Date() : undefined,
       transactionHash: `0x${rawId}dataset${i}`,
-      documents: [
-        { name: `deed_${rawId}.pdf`, type: 'deed', ipfsHash },
-        { name: `proof_${rawId}.jpg`, type: 'ownership_proof', ipfsHash: `${ipfsHash}-proof` },
-      ],
+      documents: [deedDoc, proofDoc],
     });
 
     if (propertyDocs.length >= BATCH || i === rows.length - 1) {
@@ -205,7 +272,20 @@ const run = async () => {
   }
 
   console.log('\n\nImport complete.\n');
-  console.log('=== LOGIN CREDENTIALS (real MongoDB accounts) ===\n');
+  console.log('Waiting 30 seconds to auto-verify imported pending properties...');
+  await new Promise((resolve) => setTimeout(resolve, 30000));
+  const verifyResult = await Property.updateMany(
+    { status: { $ne: 'verified' } },
+    {
+      status: 'verified',
+      blockchainVerified: true,
+      verifiedBy: official._id,
+      verifiedAt: new Date(),
+    }
+  );
+  const verifiedCount = verifyResult.modifiedCount ?? verifyResult.nModified ?? 0;
+  console.log(`Auto-verified ${verifiedCount} imported properties.`);
+  console.log('\n=== LOGIN CREDENTIALS (real MongoDB accounts) ===\n');
   console.log('Government official (verify properties):');
   console.log(`  Email:    ${official.email}`);
   console.log(`  Password: ${GOV_PASSWORD}\n`);
