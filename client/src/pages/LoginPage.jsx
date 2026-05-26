@@ -10,7 +10,7 @@ import supabase from '../services/supabase';
 import api from '../services/api';
 import { useAuthStore } from '../store';
 
-const OTP_REQUEST_COOLDOWN = 120;
+const OTP_REQUEST_COOLDOWN = 30;
 
 const LoginPage = () => {
   const [loading, setLoading] = useState(false);
@@ -45,13 +45,18 @@ const LoginPage = () => {
     if (!isValidEmail(trimmedEmail)) {
       throw new Error('Enter a valid email address.');
     }
-    ({ data, error } = await supabase.auth.signInWithOtp({ email: trimmedEmail }));
+    ({ data, error } = await supabase.auth.signInWithOtp({
+      email: trimmedEmail,
+      options: {
+        shouldCreateUser: false,
+      },
+    }));
 
     if (error) {
       const isRateLimit = error.status === 429 || /rate limit/i.test(error.message || '');
       const message =
         isRateLimit
-          ? 'Too many requests. Please wait a moment before requesting another OTP.'
+          ? 'Too many requests. Please wait 30 seconds before requesting another OTP.'
           : error.error_description || error.message || 'Failed to send OTP.';
       if (isRateLimit) {
         setResendCooldown(OTP_REQUEST_COOLDOWN);
