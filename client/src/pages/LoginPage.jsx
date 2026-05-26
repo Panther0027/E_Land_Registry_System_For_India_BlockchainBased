@@ -128,13 +128,22 @@ const LoginPage = () => {
       }
 
       const token = data.session.access_token;
-      const profileResponse = await api.get('/auth/profile', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      let user = data.user;
 
-      const user = profileResponse.data.data;
+      try {
+        const profileResponse = await api.get('/auth/profile', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        user = profileResponse.data.data || user;
+      } catch (profileError) {
+        if (profileError.response?.status !== 404) {
+          throw profileError;
+        }
+        toast.success('OTP verified. Logged in, but backend profile is unavailable; continuing with your account details.');
+      }
+
       setAuth(user, token, rememberMe);
-      toast.success(`Welcome back, ${user.fullName}!`);
+      toast.success(`Welcome back, ${user?.fullName || user?.email || 'Bhumi user'}!`);
       navigate('/dashboard', { replace: true });
     } catch (err) {
       toast.error(err.message || 'OTP verification failed.');
