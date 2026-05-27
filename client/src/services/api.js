@@ -25,10 +25,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url || '';
+    const isAuthRoute = /\/auth\/(login|verify-registration|register)/.test(url);
+
+    if (error.response?.status === 401 && !isAuthRoute) {
       useAuthStore.getState().logout();
-      window.location.href = '/login';
+      window.location.hash = '#/login';
     }
+
     if (error.response?.status === 503) {
       console.warn('API unavailable:', error.response?.data?.message);
     }
