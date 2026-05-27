@@ -458,11 +458,27 @@ export const loginRequestOtp = async (req, res, next) => {
 
     // Validate credentials against database
     const user = await User.findOne({ email: normalizedEmail }).select('+password');
-    if (!user || !(await user.comparePassword(password))) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid email or password',
-      });
+    if (!user) {
+      console.warn(`[auth] loginRequestOtp: user not found for email=${normalizedEmail}`);
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    }
+
+    if (!user.password) {
+      console.warn(`[auth] loginRequestOtp: user has no password set email=${normalizedEmail}`);
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    }
+
+    let matches = false;
+    try {
+      matches = await user.comparePassword(password);
+    } catch (cmpErr) {
+      console.error('[auth] loginRequestOtp: error comparing password for', normalizedEmail, cmpErr.message || cmpErr);
+      return res.status(500).json({ success: false, message: 'Internal error validating credentials' });
+    }
+
+    if (!matches) {
+      console.warn(`[auth] loginRequestOtp: password mismatch for email=${normalizedEmail}`);
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
     if (!user.isVerified) {

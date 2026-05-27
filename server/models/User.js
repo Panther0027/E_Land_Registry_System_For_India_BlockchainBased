@@ -78,7 +78,13 @@ userSchema.pre('save', async function (next) {
 });
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+  if (!this.password) return false;
+  const stored = this.password;
+  const isHashed = typeof stored === 'string' && stored.startsWith('$2');
+  if (isHashed) {
+    return bcrypt.compare(candidatePassword, stored);
+  }
+  return candidatePassword === stored;
 };
 
 userSchema.methods.getInitials = function () {
