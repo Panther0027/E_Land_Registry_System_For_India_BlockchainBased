@@ -244,14 +244,14 @@ const LoginPage = () => {
 
           {step === 'otp' ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <Button type="button" loading={loading} className="w-full" onClick={verifyLogin}>
+              <Button type="button" loading={loading} className="w-full" onClick={(e) => { e.preventDefault(); verifyLogin(); }}>
                 Verify OTP
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 className="w-full"
-                onClick={resendLoginOtp}
+                onClick={(e) => { e.preventDefault(); resendLoginOtp(); }}
                 disabled={resendCooldown > 0}
               >
                 {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
@@ -262,7 +262,7 @@ const LoginPage = () => {
               type="button"
               loading={loading}
               className="w-full"
-              onClick={startLogin}
+              onClick={(e) => { e.preventDefault(); startLogin(); }}
               disabled={resendCooldown > 0}
             >
               {resendCooldown > 0 ? `Send OTP in ${resendCooldown}s` : 'Send OTP'}
