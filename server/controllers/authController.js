@@ -460,12 +460,18 @@ export const loginRequestOtp = async (req, res, next) => {
     const user = await User.findOne({ email: normalizedEmail }).select('+password');
     if (!user) {
       console.warn(`[auth] loginRequestOtp: user not found for email=${normalizedEmail}`);
-      return res.status(401).json({ success: false, message: 'Invalid email or password' });
+      return res.status(401).json({
+        success: false,
+        message: 'No account found with this email. Please register first.',
+      });
     }
 
     if (!user.password) {
       console.warn(`[auth] loginRequestOtp: user has no password set email=${normalizedEmail}`);
-      return res.status(401).json({ success: false, message: 'Invalid email or password' });
+      return res.status(401).json({
+        success: false,
+        message: 'Account exists but no password is set. Please reset your password or register again.',
+      });
     }
 
     let matches = false;
@@ -478,7 +484,10 @@ export const loginRequestOtp = async (req, res, next) => {
 
     if (!matches) {
       console.warn(`[auth] loginRequestOtp: password mismatch for email=${normalizedEmail}`);
-      return res.status(401).json({ success: false, message: 'Invalid email or password' });
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid password. Please verify your password and try again.',
+      });
     }
 
     if (!user.isVerified) {

@@ -11,6 +11,7 @@ import {
   getDemoUserByEmail,
 } from './services/demoAuthStore.js';
 import { seedDemoProperties } from './data/demoPropertyStore.js';
+import { DEMO_PROPERTIES } from './data/demoProperties.js';
 import { isDemoModeEnabled } from './config/appConfig.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -23,25 +24,31 @@ const seedOfflineDemoData = async () => {
   const primaryUser = primaryEmail ? getDemoUserByEmail(primaryEmail) : null;
   if (!primaryUser) return;
 
-  seedDemoProperties([
-    {
+  const targetCount = Math.ceil(DEMO_PROPERTIES.length / 2);
+  const statusPriority = ['verified', 'disputed', 'pending'];
+  const selected = [];
+
+  for (const status of statusPriority) {
+    for (const property of DEMO_PROPERTIES) {
+      if (selected.length >= targetCount) break;
+      if (property.status === status && !selected.includes(property)) {
+        selected.push(property);
+      }
+    }
+    if (selected.length >= targetCount) break;
+  }
+
+  const halfDemo = selected.length ? selected : DEMO_PROPERTIES.slice(0, targetCount);
+
+  seedDemoProperties(
+    halfDemo.map((property) => ({
       userId: primaryUser.id ?? primaryUser._id,
       property: {
-        propertyId: 'BH-005-DEMO',
-        surveyNumber: 'SN-2024-005',
+        ...property,
         ownerName: primaryUser.fullName,
-        district: 'Khurda',
-        state: 'Odisha',
-        pincode: '751002',
-        area: 1800,
-        landType: 'residential',
-        status: 'verified',
-        ipfsHash: 'QmDemoHash005',
-        transactionHash: '0x8888888888888888888888888888888888888888888888888888888888888888',
-        blockchainVerified: true,
       },
-    },
-  ]);
+    }))
+  );
 };
 
 const start = async () => {
